@@ -1,13 +1,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { handleError, getCurrentUserId } from "./utils";
-
-export type Profile = {
-  id: string;
-  full_name: string | null;
-  avatar_url: string | null;
-  created_at: string;
-};
+import { Profile } from "./types";  // Use Profile from types.ts instead of redefining it
 
 export const getProfile = async (userId: string): Promise<Profile | null> => {
   const { data, error } = await supabase
