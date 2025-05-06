@@ -24,7 +24,8 @@ export default function DashboardPage() {
   const { 
     data: activeRooms = [], 
     isLoading: isLoadingActive,
-    error: activeError
+    error: activeError,
+    refetch: refetchActiveRooms
   } = useQuery({
     queryKey: ['active-rooms'],
     queryFn: () => getUserRooms('active')
@@ -33,7 +34,8 @@ export default function DashboardPage() {
   // Fetch user's recent rooms
   const { 
     data: recentRooms = [], 
-    isLoading: isLoadingRecent 
+    isLoading: isLoadingRecent,
+    refetch: refetchRecentRooms
   } = useQuery({
     queryKey: ['recent-rooms'],
     queryFn: () => getUserRooms('recent')
@@ -66,6 +68,10 @@ export default function DashboardPage() {
       // Join the room
       await joinRoom(room.id);
       
+      // Refetch rooms to update the lists
+      refetchActiveRooms();
+      refetchRecentRooms();
+      
       // Navigate to room
       navigate(`/room/${room.id}`);
       
@@ -94,17 +100,7 @@ export default function DashboardPage() {
     );
   }
 
-  if (activeError) {
-    return (
-      <div className="text-center py-12">
-        <h2 className="text-xl font-bold text-red-500 mb-2">Error loading rooms</h2>
-        <p className="text-muted-foreground">Please try refreshing the page</p>
-        <Button className="mt-4" onClick={() => window.location.reload()}>
-          Retry
-        </Button>
-      </div>
-    );
-  }
+  const showCreateRoomCTA = !activeRooms.length && !recentRooms.length;
 
   return (
     <div className="space-y-6">
@@ -115,7 +111,7 @@ export default function DashboardPage() {
         </div>
         <Link to="/create-room">
           <Button className="w-full sm:w-auto">
-            Create New Room
+            <Plus className="mr-2 h-4 w-4" /> Create New Room
           </Button>
         </Link>
       </div>
@@ -152,58 +148,72 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div>
-        <h2 className="text-xl font-bold mb-4">My Active Rooms</h2>
-        {activeRooms.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {activeRooms.map((room) => (
-              <RoomCard 
-                key={room.id} 
-                id={room.id}
-                name={room.name}
-                description={room.description || ''}
-                createdBy={user?.user_metadata?.full_name || 'You'}
-                participants={[]}
-                active={room.phase !== 'results'}
-                type={room.type as "dice" | "spinner" | "coin"}
-              />
-            ))}
+      {showCreateRoomCTA ? (
+        <div className="bg-white rounded-xl p-6 border flex flex-col items-center justify-center text-center py-12">
+          <div className="rounded-full bg-primary-50 p-4 mb-4">
+            <Plus size={32} className="text-primary" />
           </div>
-        ) : (
-          <div className="bg-white rounded-xl p-6 border flex flex-col items-center justify-center text-center py-12">
-            <div className="rounded-full bg-primary-50 p-4 mb-4">
-              <Plus size={32} className="text-primary" />
-            </div>
-            <h3 className="text-lg font-medium mb-2">No active rooms</h3>
-            <p className="text-muted-foreground mb-6 max-w-md">
-              You don't have any active decision rooms. Create one to get started!
-            </p>
-            <Link to="/create-room">
-              <Button>Create Your First Room</Button>
-            </Link>
-          </div>
-        )}
-      </div>
-
-      {recentRooms.length > 0 && (
-        <div>
-          <Separator className="my-8" />
-          <h2 className="text-xl font-bold mb-4">Recent Rooms</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {recentRooms.map((room) => (
-              <RoomCard 
-                key={room.id} 
-                id={room.id}
-                name={room.name}
-                description={room.description || ''}
-                createdBy={user?.user_metadata?.full_name || 'You'}
-                participants={[]}
-                active={false}
-                type={room.type as "dice" | "spinner" | "coin"}
-              />
-            ))}
-          </div>
+          <h3 className="text-lg font-medium mb-2">No rooms yet</h3>
+          <p className="text-muted-foreground mb-6 max-w-md">
+            You haven't created or joined any decision rooms yet. Create one to get started!
+          </p>
+          <Link to="/create-room">
+            <Button>Create Your First Room</Button>
+          </Link>
         </div>
+      ) : (
+        <>
+          <div>
+            <h2 className="text-xl font-bold mb-4">My Active Rooms</h2>
+            {activeRooms.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {activeRooms.map((room) => (
+                  <RoomCard 
+                    key={room.id} 
+                    id={room.id}
+                    name={room.name}
+                    description={room.description || ''}
+                    createdBy={user?.user_metadata?.full_name || 'You'}
+                    participants={[]}
+                    active={room.phase !== 'results'}
+                    type={room.type as "dice" | "spinner" | "coin"}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="bg-white rounded-xl p-6 border flex flex-col items-center justify-center text-center py-8">
+                <h3 className="text-lg font-medium mb-2">No active rooms</h3>
+                <p className="text-muted-foreground mb-4">
+                  You don't have any active decision rooms. Create one to get started!
+                </p>
+                <Link to="/create-room">
+                  <Button>Create a Room</Button>
+                </Link>
+              </div>
+            )}
+          </div>
+
+          {recentRooms.length > 0 && (
+            <div>
+              <Separator className="my-8" />
+              <h2 className="text-xl font-bold mb-4">Recent Rooms</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {recentRooms.map((room) => (
+                  <RoomCard 
+                    key={room.id} 
+                    id={room.id}
+                    name={room.name}
+                    description={room.description || ''}
+                    createdBy={user?.user_metadata?.full_name || 'You'}
+                    participants={[]}
+                    active={false}
+                    type={room.type as "dice" | "spinner" | "coin"}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
