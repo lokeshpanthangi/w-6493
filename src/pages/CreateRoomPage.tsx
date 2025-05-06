@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { z } from "zod";
@@ -30,7 +29,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Check, Clock, Copy, Plus, Share, Users, X } from "lucide-react";
 import { createRoom, joinRoom } from "@/services/api";
 import { useAuth } from "@/context/AuthContext";
-import { Checkbox } from "@/components/ui/radio-group";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface DecisionTypeOption {
   id: "dice" | "coin" | "spinner";
