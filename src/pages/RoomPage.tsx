@@ -20,6 +20,9 @@ import { Clock, Plus, Share, Trash, Edit, Check, X } from "lucide-react";
 // Mock room phases
 type RoomPhase = "lobby" | "submission" | "voting" | "results";
 
+// Define the room decision method types
+type RoomDecisionMethod = "spinner" | "dice" | "coin";
+
 // Mock option type
 interface Option {
   id: string;
@@ -50,7 +53,7 @@ export default function RoomPage() {
     name: "Movie Night Decision",
     description: "Let's decide which movie to watch tonight!",
     createdBy: "Alex",
-    type: "spinner" as const,
+    type: "spinner" as RoomDecisionMethod,
     timeRemaining: 1800, // seconds
     allowEveryoneToSubmit: true,
     hideResultsUntilEnd: true,
