@@ -152,7 +152,7 @@ export default function CreateRoomPage() {
       const expiresAt = new Date();
       expiresAt.setMinutes(expiresAt.getMinutes() + formValues.timeLimit);
       
-      // Use the first selected decision type as the primary type (will be extended in the future)
+      // Use the first selected decision type as the primary type
       // If no decision types are selected, default to spinner
       const primaryDecisionType = formValues.decisionTypes.length > 0 ? 
         formValues.decisionTypes[0] : "spinner";
@@ -181,12 +181,12 @@ export default function CreateRoomPage() {
       
       setRoomCreated(true);
     } catch (error: any) {
+      console.error("Error creating room:", error);
       toast({
         title: "Error creating room",
         description: error.message || "An error occurred while creating the room",
         variant: "destructive",
       });
-      console.error("Error creating room:", error);
       // Go back to the review step if creation fails
       setCurrentStep(2);
     } finally {

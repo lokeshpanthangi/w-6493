@@ -62,6 +62,7 @@ export default function DashboardPage() {
           description: "No room exists with that code. Please check and try again.",
           variant: "destructive",
         });
+        setIsJoining(false);
         return;
       }
       
@@ -81,6 +82,7 @@ export default function DashboardPage() {
       });
       
     } catch (error: any) {
+      console.error("Error joining room:", error);
       toast({
         title: "Could not join room",
         description: error.message || "An error occurred while joining the room",

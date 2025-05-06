@@ -17,7 +17,13 @@ export const createRoom = async (
   const { data, error } = await supabase
     .from("rooms")
     .insert({
-      ...roomData,
+      name: roomData.name,
+      description: roomData.description,
+      type: roomData.type,
+      allow_everyone_to_submit: roomData.allow_everyone_to_submit,
+      hide_results_until_end: roomData.hide_results_until_end,
+      expires_at: roomData.expires_at,
+      max_participants: roomData.max_participants,
       code,
       created_by: userId,
       phase: 'lobby' 

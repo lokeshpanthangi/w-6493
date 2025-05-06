@@ -1,10 +1,25 @@
+
 import { supabase } from "@/integrations/supabase/client";
-import { Participant, Profile } from "./types";
+import { Participant } from "./types";
 import { handleError, getCurrentUserId } from "./utils";
+import { Profile } from "./types";
 
 export const joinRoom = async (roomId: string): Promise<Participant> => {
   const userId = await getCurrentUserId();
   
+  // Check if user is already a participant to avoid duplicates
+  const { data: existingParticipant } = await supabase
+    .from("participants")
+    .select("*")
+    .eq("room_id", roomId)
+    .eq("user_id", userId)
+    .maybeSingle();
+    
+  if (existingParticipant) {
+    return existingParticipant as Participant;
+  }
+  
+  // Create new participant entry
   const { data, error } = await supabase
     .from("participants")
     .insert({

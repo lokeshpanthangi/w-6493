@@ -60,8 +60,8 @@ export default function JoinRoomPage() {
         return;
       }
 
-      // Get participants count
-      const participantsCount = 3; // Mock for now
+      // Get participants count (mocked for now)
+      const participantsCount = 3; // We'll improve this later with an actual count
 
       // Set room details
       setRoomDetails({
@@ -73,12 +73,12 @@ export default function JoinRoomPage() {
       });
       
     } catch (error) {
+      console.error("Error checking room:", error);
       toast({
         title: "Error checking room",
         description: "Could not check room details. Please try again.",
         variant: "destructive",
       });
-      console.error("Error checking room:", error);
     } finally {
       setIsLoading(false);
     }
@@ -90,7 +90,7 @@ export default function JoinRoomPage() {
     setIsJoining(true);
 
     try {
-      // Join the room
+      // Join the room with error handling
       await joinRoom(roomDetails.id);
       
       toast({
@@ -101,12 +101,12 @@ export default function JoinRoomPage() {
       // Navigate to the room page
       navigate(`/room/${roomDetails.id}`);
     } catch (error) {
+      console.error("Error joining room:", error);
       toast({
         title: "Failed to join room",
         description: "There was an error joining the room. Please try again.",
         variant: "destructive",
       });
-      console.error("Error joining room:", error);
     } finally {
       setIsJoining(false);
     }
@@ -121,6 +121,8 @@ export default function JoinRoomPage() {
       case "coin":
         return <CoinFlip size="sm" />;
       case "spinner":
+        return <div className="spinner-wheel w-6 h-6"></div>;
+      default:
         return <div className="spinner-wheel w-6 h-6"></div>;
     }
   };
