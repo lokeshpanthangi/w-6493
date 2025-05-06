@@ -62,9 +62,26 @@ export const updateRoom = async (id: string, updates: Partial<Room>): Promise<Ro
 };
 
 export const getUserRooms = async (type: "active" | "recent" = "active"): Promise<Room[]> => {
+  const userId = await getCurrentUserId();
+  
+  // Get rooms where the user is a participant
+  const { data: participantRooms, error: participantError } = await supabase
+    .from('participants')
+    .select('room_id')
+    .eq('user_id', userId);
+
+  handleError(participantError);
+  
+  if (!participantRooms || participantRooms.length === 0) {
+    return [];
+  }
+  
+  const roomIds = participantRooms.map(p => p.room_id);
+  
   let query = supabase
     .from("rooms")
     .select("*")
+    .in('id', roomIds)
     .order("created_at", { ascending: false });
 
   if (type === "active") {

@@ -11,6 +11,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/components/ui/use-toast";
 import { getUserRooms, getRoomByCode, joinRoom } from "@/services/api";
+import { Plus } from "lucide-react";
 
 export default function DashboardPage() {
   const navigate = useNavigate();
@@ -97,7 +98,7 @@ export default function DashboardPage() {
     return (
       <div className="text-center py-12">
         <h2 className="text-xl font-bold text-red-500 mb-2">Error loading rooms</h2>
-        <p className="text-muted-foreground">Please try again later</p>
+        <p className="text-muted-foreground">Please try refreshing the page</p>
         <Button className="mt-4" onClick={() => window.location.reload()}>
           Retry
         </Button>
@@ -169,9 +170,13 @@ export default function DashboardPage() {
             ))}
           </div>
         ) : (
-          <div className="bg-white rounded-xl p-6 text-center border">
-            <p className="text-muted-foreground mb-4">
-              You don't have any active rooms.
+          <div className="bg-white rounded-xl p-6 border flex flex-col items-center justify-center text-center py-12">
+            <div className="rounded-full bg-primary-50 p-4 mb-4">
+              <Plus size={32} className="text-primary" />
+            </div>
+            <h3 className="text-lg font-medium mb-2">No active rooms</h3>
+            <p className="text-muted-foreground mb-6 max-w-md">
+              You don't have any active decision rooms. Create one to get started!
             </p>
             <Link to="/create-room">
               <Button>Create Your First Room</Button>

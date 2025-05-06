@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/use-toast";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { Dice3D } from "@/components/ui/dice-3d";
+import { useAuth } from "@/context/AuthContext";
 
 interface FormData {
   email: string;
@@ -25,6 +26,7 @@ export function AuthForm() {
   });
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { signIn, signUp } = useAuth();
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -86,21 +88,11 @@ export function AuthForm() {
 
     setIsLoading(true);
     try {
-      // Mock sign in - would be replaced with actual auth
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      
-      toast({
-        title: "Signed in successfully!",
-        description: "Welcome back to DiceyDecisions!",
-      });
-      
+      await signIn(formData.email, formData.password);
       navigate("/dashboard");
     } catch (error) {
-      toast({
-        title: "Sign in failed",
-        description: "Please check your credentials and try again.",
-        variant: "destructive",
-      });
+      console.error("Sign in error:", error);
+      // Toast is shown in auth context
     } finally {
       setIsLoading(false);
     }
@@ -112,21 +104,11 @@ export function AuthForm() {
 
     setIsLoading(true);
     try {
-      // Mock sign up - would be replaced with actual auth
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      
-      toast({
-        title: "Account created successfully!",
-        description: "Welcome to DiceyDecisions! Please check your email to verify your account.",
-      });
-      
+      await signUp(formData.email, formData.password, formData.displayName || '');
       navigate("/verify-email");
     } catch (error) {
-      toast({
-        title: "Sign up failed",
-        description: "An error occurred. Please try again.",
-        variant: "destructive",
-      });
+      console.error("Sign up error:", error);
+      // Toast is shown in auth context
     } finally {
       setIsLoading(false);
     }

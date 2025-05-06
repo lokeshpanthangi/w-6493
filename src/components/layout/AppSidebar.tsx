@@ -1,12 +1,13 @@
 
 import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import { Home, Plus, History, User, Bell, Settings } from "lucide-react";
+import { Home, Plus, History, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { Dice3D } from "@/components/ui/dice-3d";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useAuth } from "@/context/AuthContext";
 
 import {
   Sidebar,
@@ -19,6 +20,7 @@ import {
 export function AppSidebar() {
   const location = useLocation();
   const isMobile = useIsMobile();
+  const { user } = useAuth();
   
   // Don't show the sidebar on mobile
   if (isMobile) return null;
@@ -69,42 +71,21 @@ export function AppSidebar() {
               Past Decisions
             </Button>
           </Link>
-          
-          <Separator className="my-4" />
-          
-          <Link to="/notifications">
-            <Button
-              variant={isActive("/notifications") ? "default" : "ghost"}
-              className="w-full justify-start"
-              size="sm"
-            >
-              <Bell className="mr-2 h-4 w-4" />
-              Notifications
-              <span className="ml-auto bg-dicey-purple text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                2
-              </span>
-            </Button>
-          </Link>
-          <Link to="/settings">
-            <Button
-              variant={isActive("/settings") ? "default" : "ghost"}
-              className="w-full justify-start"
-              size="sm"
-            >
-              <Settings className="mr-2 h-4 w-4" />
-              Settings
-            </Button>
-          </Link>
         </div>
       </SidebarContent>
       
       <SidebarFooter className="p-4">
         <Link to="/profile">
           <div className="flex items-center gap-3 cursor-pointer p-2 rounded-md hover:bg-muted">
-            <UserAvatar src="" name="John Doe" status="online" size="sm" />
+            <UserAvatar 
+              src={user?.user_metadata?.avatar_url || ""} 
+              name={user?.user_metadata?.full_name || "User"} 
+              status="online" 
+              size="sm" 
+            />
             <div className="flex flex-col">
-              <span className="text-sm font-medium">John Doe</span>
-              <span className="text-xs text-muted-foreground">john@example.com</span>
+              <span className="text-sm font-medium">{user?.user_metadata?.full_name || "User"}</span>
+              <span className="text-xs text-muted-foreground">{user?.email || ""}</span>
             </div>
           </div>
         </Link>

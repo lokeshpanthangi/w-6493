@@ -1,18 +1,17 @@
 
-import { Profile } from "./profileService";
-
 export type Room = {
   id: string;
   code: string;
   name: string;
   description: string | null;
   created_at: string;
-  expires_at: string | null;
   created_by: string;
-  type: "dice" | "spinner" | "coin";
-  phase: "lobby" | "submission" | "voting" | "results";
+  expires_at: string | null;
+  phase: "lobby" | "voting" | "results";
+  type: string;
   allow_everyone_to_submit: boolean;
   hide_results_until_end: boolean;
+  max_participants: number | null;
 };
 
 export type Participant = {
@@ -20,19 +19,19 @@ export type Participant = {
   room_id: string;
   user_id: string;
   joined_at: string;
-  has_submitted: boolean;
-  has_voted: boolean;
   is_ready: boolean;
-  profiles?: Profile;
+  has_voted: boolean;
+  has_submitted: boolean;
+  profiles: Profile;
 };
 
 export type Option = {
   id: string;
   room_id: string;
   text: string;
-  created_at: string;
   created_by: string;
-  profiles?: Profile;
+  created_at: string;
+  profiles: Profile;
 };
 
 export type Vote = {
@@ -46,8 +45,15 @@ export type Vote = {
 export type Decision = {
   id: string;
   room_id: string;
+  decided_at: string;
   winning_option_id: string | null;
   tie_breaker_used: boolean;
-  tie_breaker_type: "dice" | "spinner" | "coin" | null;
-  decided_at: string;
+  tie_breaker_type: string | null;
+};
+
+export type Profile = {
+  id: string;
+  full_name: string | null;
+  avatar_url: string | null;
+  created_at: string;
 };

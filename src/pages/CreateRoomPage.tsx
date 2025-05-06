@@ -30,9 +30,10 @@ import { Spinner } from "@/components/ui/spinner";
 import { Check, Clock, Copy, Plus, Share, Users, X } from "lucide-react";
 import { createRoom, joinRoom } from "@/services/api";
 import { useAuth } from "@/context/AuthContext";
+import { Checkbox } from "@/components/ui/radio-group";
 
 interface DecisionTypeOption {
-  id: string;
+  id: "dice" | "coin" | "spinner";
   name: string;
   description: string;
   icon: JSX.Element;
@@ -43,7 +44,7 @@ const roomFormSchema = z.object({
   description: z.string().optional(),
   maxParticipants: z.number().int().nonnegative(),
   timeLimit: z.number().int().min(5).max(120),
-  decisionType: z.enum(["dice", "coin", "spinner"]),
+  decisionTypes: z.array(z.enum(["dice", "coin", "spinner"])).min(1, "At least one decision type is required"),
   allowEveryoneToSubmit: z.boolean().default(true),
   hideResultsUntilEnd: z.boolean().default(false),
 });
@@ -88,6 +89,7 @@ export default function CreateRoomPage() {
   const [roomCreated, setRoomCreated] = useState(false);
   const [roomCode, setRoomCode] = useState("");
   const [roomId, setRoomId] = useState("");
+  const [selectedDecisionTypes, setSelectedDecisionTypes] = useState<string[]>([]);
   
   const form = useForm<RoomFormValues>({
     resolver: zodResolver(roomFormSchema),
@@ -96,11 +98,24 @@ export default function CreateRoomPage() {
       description: "",
       maxParticipants: 0, // 0 means unlimited
       timeLimit: 30, // 30 minutes default
-      decisionType: "spinner",
+      decisionTypes: ["spinner"],
       allowEveryoneToSubmit: true,
       hideResultsUntilEnd: false,
     },
   });
+
+  const toggleDecisionType = (type: "dice" | "coin" | "spinner") => {
+    const currentValues = form.getValues().decisionTypes;
+    
+    if (currentValues.includes(type)) {
+      // Remove if already selected
+      const updatedTypes = currentValues.filter(t => t !== type);
+      form.setValue("decisionTypes", updatedTypes.length ? updatedTypes : [type]);
+    } else {
+      // Add if not selected
+      form.setValue("decisionTypes", [...currentValues, type]);
+    }
+  };
 
   const handleNextStep = () => {
     if (currentStep === 0 && !form.getValues().name) {
@@ -112,10 +127,10 @@ export default function CreateRoomPage() {
       return;
     }
 
-    if (currentStep === 0 && !form.getValues().decisionType) {
+    if (currentStep === 0 && form.getValues().decisionTypes.length === 0) {
       toast({
         title: "Decision type required",
-        description: "Please select a decision method for your room",
+        description: "Please select at least one decision method for your room",
         variant: "destructive",
       });
       return;
@@ -147,14 +162,18 @@ export default function CreateRoomPage() {
       const expiresAt = new Date();
       expiresAt.setMinutes(expiresAt.getMinutes() + formValues.timeLimit);
       
+      // Use the first selected decision type as the primary type (will be extended in the future)
+      const primaryDecisionType = formValues.decisionTypes[0];
+      
       // Create the room
       const room = await createRoom({
         name: formValues.name,
         description: formValues.description || null,
         expires_at: expiresAt.toISOString(),
-        type: formValues.decisionType,
+        type: primaryDecisionType,
         allow_everyone_to_submit: formValues.allowEveryoneToSubmit,
         hide_results_until_end: formValues.hideResultsUntilEnd,
+        max_participants: formValues.maxParticipants || null,
       });
       
       // Join the room as creator
@@ -165,7 +184,7 @@ export default function CreateRoomPage() {
       
       toast({
         title: "Room created!",
-        description: `Your ${formValues.decisionType} decision room is ready to share.`,
+        description: `Your ${primaryDecisionType} decision room is ready to share.`,
       });
       
       setRoomCreated(true);
@@ -282,30 +301,50 @@ export default function CreateRoomPage() {
                 )}
               />
 
-              <div className="space-y-2">
-                <Label>Decision Method</Label>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {decisionTypes.map((type) => (
-                    <Card 
-                      key={type.id}
-                      className={`cursor-pointer transition-all hover:border-dicey-purple ${
-                        form.getValues().decisionType === type.id ? "border-2 border-dicey-purple" : ""
-                      }`}
-                      onClick={() => form.setValue("decisionType", type.id as "dice" | "coin" | "spinner")}
-                    >
-                      <CardHeader className="pb-2">
-                        <div className="flex justify-between items-start">
-                          <CardTitle className="text-lg">{type.name}</CardTitle>
-                          <div>{type.icon}</div>
-                        </div>
-                      </CardHeader>
-                      <CardContent>
-                        <CardDescription>{type.description}</CardDescription>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              </div>
+              <FormField
+                control={form.control}
+                name="decisionTypes"
+                render={() => (
+                  <FormItem className="space-y-2">
+                    <FormLabel>Decision Methods</FormLabel>
+                    <FormMessage />
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {decisionTypes.map((type) => {
+                        const isSelected = form.getValues().decisionTypes.includes(type.id);
+                        return (
+                          <Card 
+                            key={type.id}
+                            className={`cursor-pointer transition-all ${
+                              isSelected ? "border-2 border-dicey-purple" : "hover:border-dicey-purple hover:border-opacity-50"
+                            }`}
+                            onClick={() => toggleDecisionType(type.id)}
+                          >
+                            <CardHeader className="pb-2">
+                              <div className="flex justify-between items-start">
+                                <CardTitle className="text-lg">{type.name}</CardTitle>
+                                <div className="flex items-center">
+                                  {isSelected && (
+                                    <div className="w-5 h-5 rounded-full bg-dicey-purple flex items-center justify-center mr-2">
+                                      <Check className="h-3 w-3 text-white" />
+                                    </div>
+                                  )}
+                                  <div>{type.icon}</div>
+                                </div>
+                              </div>
+                            </CardHeader>
+                            <CardContent>
+                              <CardDescription>{type.description}</CardDescription>
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Select one or more decision methods to use in your room.
+                    </p>
+                  </FormItem>
+                )}
+              />
             </div>
           )}
 
@@ -426,14 +465,18 @@ export default function CreateRoomPage() {
                     </div>
                     
                     <div className="space-y-2">
-                      <h3 className="text-sm font-medium text-muted-foreground">Decision Method</h3>
-                      <div className="flex items-center gap-2">
-                        {form.getValues().decisionType === "dice" && <Dice3D size="sm" />}
-                        {form.getValues().decisionType === "coin" && <CoinFlip size="sm" />}
-                        {form.getValues().decisionType === "spinner" && <div className="spinner-wheel w-6 h-6"></div>}
-                        <span>
-                          {decisionTypes.find(t => t.id === form.getValues().decisionType)?.name}
-                        </span>
+                      <h3 className="text-sm font-medium text-muted-foreground">Decision Methods</h3>
+                      <div className="flex flex-wrap gap-2">
+                        {form.getValues().decisionTypes.map(type => (
+                          <div key={type} className="flex items-center gap-2 bg-muted rounded-full px-3 py-1">
+                            {type === "dice" && <Dice3D size="sm" />}
+                            {type === "coin" && <CoinFlip size="sm" />}
+                            {type === "spinner" && <div className="spinner-wheel w-4 h-4"></div>}
+                            <span className="text-sm">
+                              {decisionTypes.find(t => t.id === type)?.name}
+                            </span>
+                          </div>
+                        ))}
                       </div>
                     </div>
                     
@@ -510,9 +553,9 @@ export default function CreateRoomPage() {
               <Card className="border-dicey-purple-dark/30 bg-gradient-to-br from-white to-dicey-purple-light/20">
                 <CardHeader className="text-center pb-2">
                   <div className="mx-auto mb-2">
-                    {form.getValues().decisionType === "dice" && <Dice3D size="lg" />}
-                    {form.getValues().decisionType === "coin" && <CoinFlip size="lg" />}
-                    {form.getValues().decisionType === "spinner" && (
+                    {form.getValues().decisionTypes.includes("dice") && <Dice3D size="lg" />}
+                    {form.getValues().decisionTypes.includes("coin") && !form.getValues().decisionTypes.includes("dice") && <CoinFlip size="lg" />}
+                    {form.getValues().decisionTypes.includes("spinner") && !form.getValues().decisionTypes.includes("dice") && !form.getValues().decisionTypes.includes("coin") && (
                       <SpinnerWheel size="lg" options={["Ready!", "To Go!", "Decide!"]} />
                     )}
                   </div>
