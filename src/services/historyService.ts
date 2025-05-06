@@ -1,8 +1,6 @@
-
 import { supabase } from "@/integrations/supabase/client";
-import { Room, Decision, Option, Participant } from "./types";
+import { Room, Decision, Option, Participant, Profile } from "./types";
 import { handleError, getCurrentUserId } from "./utils";
-import { Profile } from "./profileService";
 
 export const getUserDecisionsHistory = async (): Promise<{
   rooms: Room[];

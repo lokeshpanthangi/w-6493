@@ -1,8 +1,6 @@
-
 import { supabase } from "@/integrations/supabase/client";
-import { Option } from "./types";
+import { Option, Profile } from "./types";
 import { handleError, getCurrentUserId } from "./utils";
-import { Profile } from "./profileService";
 
 export const createOption = async (
   roomId: string,

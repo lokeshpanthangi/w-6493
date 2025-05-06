@@ -1,8 +1,6 @@
-
 import { supabase } from "@/integrations/supabase/client";
-import { Participant } from "./types";
+import { Participant, Profile } from "./types";
 import { handleError, getCurrentUserId } from "./utils";
-import { Profile } from "./profileService";
 
 export const joinRoom = async (roomId: string): Promise<Participant> => {
   const userId = await getCurrentUserId();
