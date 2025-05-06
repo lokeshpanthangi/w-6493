@@ -1,5 +1,6 @@
 
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -14,50 +15,24 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { Dice3D } from "@/components/ui/dice-3d";
 import { CoinFlip } from "@/components/ui/coin-flip";
-
-// Mock decision history data
-const pastDecisions = [
-  {
-    id: "decision-1",
-    roomName: "Tonight's Dinner Pick",
-    decidedOn: "2023-05-05T18:30:00Z",
-    participants: ["Alex", "Morgan", "Taylor"],
-    options: ["Italian", "Sushi", "Mexican", "Thai", "Burgers"],
-    winner: "Sushi",
-    method: "dice",
-  },
-  {
-    id: "decision-2",
-    roomName: "Movie Night",
-    decidedOn: "2023-05-03T20:00:00Z",
-    participants: ["Alex", "Morgan", "Jordan", "Riley"],
-    options: ["The Matrix", "Inception", "Interstellar"],
-    winner: "Inception",
-    method: "spinner",
-  },
-  {
-    id: "decision-3",
-    roomName: "Weekend Activity",
-    decidedOn: "2023-04-29T10:15:00Z",
-    participants: ["Alex", "Taylor"],
-    options: ["Hiking", "Museum"],
-    winner: "Hiking",
-    method: "coin",
-  },
-  {
-    id: "decision-4",
-    roomName: "Team Lunch",
-    decidedOn: "2023-04-27T12:00:00Z",
-    participants: ["Alex", "Morgan", "Taylor", "Jordan", "Casey"],
-    options: ["Pizza", "Salad", "Sandwiches", "Sushi"],
-    winner: "Sandwiches",
-    method: "dice",
-  },
-];
+import { Spinner } from "@/components/ui/spinner";
+import { getUserDecisionsHistory } from "@/services/api";
+import type { Room, Decision, Option, Participant } from "@/services/api";
 
 export default function HistoryPage() {
   const [searchTerm, setSearchTerm] = useState("");
-
+  const [activeTab, setActiveTab] = useState<string>("all");
+  
+  // Fetch decision history
+  const { 
+    data, 
+    isLoading, 
+    error 
+  } = useQuery({
+    queryKey: ['decisions-history'],
+    queryFn: getUserDecisionsHistory
+  });
+  
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString("en-US", {
@@ -66,12 +41,30 @@ export default function HistoryPage() {
       year: "numeric",
     });
   };
-
-  const filteredDecisions = pastDecisions.filter(
-    (decision) =>
-      decision.roomName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      decision.winner.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  
+  const getDecisionWinner = (roomId: string): Option | undefined => {
+    if (!data) return undefined;
+    
+    const decision = data.decisions.find(d => d.room_id === roomId);
+    if (!decision || !decision.winning_option_id) return undefined;
+    
+    return data.options.find(o => o.id === decision.winning_option_id);
+  };
+  
+  const getRoomOptions = (roomId: string): Option[] => {
+    if (!data) return [];
+    return data.options.filter(o => o.room_id === roomId);
+  };
+  
+  const getRoomParticipants = (roomId: string): Participant[] => {
+    if (!data) return [];
+    return data.participants.filter(p => p.room_id === roomId);
+  };
+  
+  const filteredDecisions = data?.rooms.filter(room => 
+    room.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    getDecisionWinner(room.id)?.text.toLowerCase().includes(searchTerm.toLowerCase())
+  ) || [];
 
   const renderDecisionMethod = (method: string) => {
     switch (method) {
@@ -85,6 +78,27 @@ export default function HistoryPage() {
         return null;
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12">
+        <Spinner size="lg" />
+        <p className="mt-4 text-muted-foreground">Loading your decision history...</p>
+      </div>
+    );
+  }
+  
+  if (error) {
+    return (
+      <div className="text-center py-12">
+        <h2 className="text-xl font-bold text-red-500 mb-2">Error loading history</h2>
+        <p className="text-muted-foreground">Please try again later</p>
+        <Button className="mt-4" onClick={() => window.location.reload()}>
+          Retry
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -102,7 +116,11 @@ export default function HistoryPage() {
             className="w-full"
           />
         </div>
-        <Tabs defaultValue="all" className="w-full sm:w-auto">
+        <Tabs 
+          value={activeTab} 
+          onValueChange={setActiveTab}
+          className="w-full sm:w-auto"
+        >
           <TabsList>
             <TabsTrigger value="all">All</TabsTrigger>
             <TabsTrigger value="rooms">My Rooms</TabsTrigger>
@@ -113,70 +131,92 @@ export default function HistoryPage() {
 
       {filteredDecisions.length > 0 ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {filteredDecisions.map((decision) => (
-            <Card key={decision.id} className="overflow-hidden">
-              <CardHeader className="pb-2">
-                <div className="flex justify-between">
-                  <div>
-                    <CardTitle>{decision.roomName}</CardTitle>
-                    <CardDescription>
-                      Decided on {formatDate(decision.decidedOn)}
-                    </CardDescription>
+          {filteredDecisions.map((room) => {
+            const winner = getDecisionWinner(room.id);
+            const options = getRoomOptions(room.id);
+            const participants = getRoomParticipants(room.id);
+            const decision = data?.decisions.find(d => d.room_id === room.id);
+            
+            return (
+              <Card key={room.id} className="overflow-hidden">
+                <CardHeader className="pb-2">
+                  <div className="flex justify-between">
+                    <div>
+                      <CardTitle>{room.name}</CardTitle>
+                      <CardDescription>
+                        Decided on {formatDate(room.created_at)}
+                      </CardDescription>
+                    </div>
+                    <div>{renderDecisionMethod(room.type)}</div>
                   </div>
-                  <div>{renderDecisionMethod(decision.method)}</div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div>
-                    <h4 className="text-sm font-medium mb-1">Result</h4>
-                    <div className="flex items-center gap-2">
-                      <div className="bg-dicey-purple text-white font-medium px-4 py-1 rounded-full">
-                        {decision.winner}
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div>
+                      <h4 className="text-sm font-medium mb-1">Result</h4>
+                      <div className="flex items-center gap-2">
+                        <div className="bg-dicey-purple text-white font-medium px-4 py-1 rounded-full">
+                          {winner?.text || "No winner determined"}
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <div>
-                    <h4 className="text-sm font-medium mb-1">All Options</h4>
-                    <div className="flex flex-wrap gap-2">
-                      {decision.options.map((option) => (
-                        <div
-                          key={option}
-                          className={`px-3 py-1 rounded-full text-xs font-medium ${
-                            option === decision.winner
-                              ? "bg-dicey-purple text-white"
-                              : "bg-muted text-muted-foreground"
-                          }`}
-                        >
-                          {option}
-                        </div>
-                      ))}
+                    <div>
+                      <h4 className="text-sm font-medium mb-1">All Options</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {options.map((option) => (
+                          <div
+                            key={option.id}
+                            className={`px-3 py-1 rounded-full text-xs font-medium ${
+                              option.id === winner?.id
+                                ? "bg-dicey-purple text-white"
+                                : "bg-muted text-muted-foreground"
+                            }`}
+                          >
+                            {option.text}
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                </div>
-              </CardContent>
-              <CardFooter className="border-t bg-muted/30 pt-2 pb-2">
-                <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <span>With:</span>
-                  <div className="flex -space-x-2">
-                    {decision.participants.slice(0, 3).map((participant, i) => (
-                      <UserAvatar
-                        key={`${decision.id}-${participant}-${i}`}
-                        name={participant}
-                        size="xs"
-                      />
-                    ))}
-                    {decision.participants.length > 3 && (
-                      <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center text-xs text-muted-foreground">
-                        +{decision.participants.length - 3}
+                    
+                    {decision?.tie_breaker_used && (
+                      <div>
+                        <h4 className="text-sm font-medium mb-1">Tiebreaker Used</h4>
+                        <div className="flex items-center gap-2">
+                          {renderDecisionMethod(decision.tie_breaker_type || room.type)}
+                          <span className="text-sm">
+                            {decision.tie_breaker_type === "dice" && "Dice Roll"}
+                            {decision.tie_breaker_type === "coin" && "Coin Flip"}
+                            {decision.tie_breaker_type === "spinner" && "Spinner Wheel"}
+                          </span>
+                        </div>
                       </div>
                     )}
                   </div>
-                </div>
-              </CardFooter>
-            </Card>
-          ))}
+                </CardContent>
+                <CardFooter className="border-t bg-muted/30 pt-2 pb-2">
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <span>With:</span>
+                    <div className="flex -space-x-2">
+                      {participants.slice(0, 3).map((participant, i) => (
+                        <UserAvatar
+                          key={`${room.id}-${participant.id}-${i}`}
+                          name={participant.profiles?.full_name || "User"}
+                          size="xs"
+                          src={participant.profiles?.avatar_url || undefined}
+                        />
+                      ))}
+                      {participants.length > 3 && (
+                        <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center text-xs text-muted-foreground">
+                          +{participants.length - 3}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </CardFooter>
+              </Card>
+            );
+          })}
         </div>
       ) : (
         <div className="bg-white rounded-lg p-8 text-center border">
@@ -190,7 +230,7 @@ export default function HistoryPage() {
               You haven't made any decisions yet. Create a room to get started!
             </p>
           )}
-          <Button>Create a Room</Button>
+          <Button onClick={() => window.location.href = '/create-room'}>Create a Room</Button>
         </div>
       )}
     </div>

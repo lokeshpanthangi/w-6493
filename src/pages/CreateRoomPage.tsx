@@ -1,6 +1,9 @@
 
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,8 +26,10 @@ import { SpinnerWheel } from "@/components/ui/spinner-wheel";
 import { RoomCodeDisplay } from "@/components/room/RoomCodeDisplay";
 import { Progress } from "@/components/ui/progress";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { useForm } from "react-hook-form";
+import { Spinner } from "@/components/ui/spinner";
 import { Check, Clock, Copy, Plus, Share, Users, X } from "lucide-react";
+import { createRoom, joinRoom } from "@/services/api";
+import { useAuth } from "@/context/AuthContext";
 
 interface DecisionTypeOption {
   id: string;
@@ -33,15 +38,17 @@ interface DecisionTypeOption {
   icon: JSX.Element;
 }
 
-interface RoomFormValues {
-  name: string;
-  description: string;
-  maxParticipants: number;
-  timeLimit: number;
-  decisionType: string;
-  allowEveryoneToSubmit: boolean;
-  hideResultsUntilEnd: boolean;
-}
+const roomFormSchema = z.object({
+  name: z.string().min(1, "Room name is required"),
+  description: z.string().optional(),
+  maxParticipants: z.number().int().nonnegative(),
+  timeLimit: z.number().int().min(5).max(120),
+  decisionType: z.enum(["dice", "coin", "spinner"]),
+  allowEveryoneToSubmit: z.boolean().default(true),
+  hideResultsUntilEnd: z.boolean().default(false),
+});
+
+type RoomFormValues = z.infer<typeof roomFormSchema>;
 
 const decisionTypes: DecisionTypeOption[] = [
   {
@@ -74,19 +81,22 @@ const STEPS = [
 export default function CreateRoomPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user } = useAuth();
   
   const [currentStep, setCurrentStep] = useState(0);
   const [isCreating, setIsCreating] = useState(false);
   const [roomCreated, setRoomCreated] = useState(false);
   const [roomCode, setRoomCode] = useState("");
+  const [roomId, setRoomId] = useState("");
   
   const form = useForm<RoomFormValues>({
+    resolver: zodResolver(roomFormSchema),
     defaultValues: {
       name: "",
       description: "",
       maxParticipants: 0, // 0 means unlimited
       timeLimit: 30, // 30 minutes default
-      decisionType: "",
+      decisionType: "spinner",
       allowEveryoneToSubmit: true,
       hideResultsUntilEnd: false,
     },
@@ -114,7 +124,7 @@ export default function CreateRoomPage() {
     if (currentStep < STEPS.length - 1) {
       setCurrentStep(currentStep + 1);
       
-      // If we're moving to the final step, simulate room creation
+      // If we're moving to the final step, create the room
       if (currentStep === STEPS.length - 2) {
         handleCreateRoom();
       }
@@ -127,23 +137,50 @@ export default function CreateRoomPage() {
     }
   };
 
-  const handleCreateRoom = () => {
+  const handleCreateRoom = async () => {
     setIsCreating(true);
 
-    // Mock room creation - would be replaced with actual API call
-    setTimeout(() => {
-      // Generate a random 6-character alphanumeric room code
-      const generatedRoomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-      setRoomCode(generatedRoomCode);
+    try {
+      const formValues = form.getValues();
+      
+      // Calculate expiry date based on time limit (in minutes)
+      const expiresAt = new Date();
+      expiresAt.setMinutes(expiresAt.getMinutes() + formValues.timeLimit);
+      
+      // Create the room
+      const room = await createRoom({
+        name: formValues.name,
+        description: formValues.description || null,
+        expires_at: expiresAt.toISOString(),
+        type: formValues.decisionType,
+        allow_everyone_to_submit: formValues.allowEveryoneToSubmit,
+        hide_results_until_end: formValues.hideResultsUntilEnd,
+      });
+      
+      // Join the room as creator
+      await joinRoom(room.id);
+      
+      setRoomId(room.id);
+      setRoomCode(room.code);
       
       toast({
         title: "Room created!",
-        description: `Your ${form.getValues().decisionType} decision room is ready to share.`,
+        description: `Your ${formValues.decisionType} decision room is ready to share.`,
       });
       
-      setIsCreating(false);
       setRoomCreated(true);
-    }, 1500);
+    } catch (error: any) {
+      toast({
+        title: "Error creating room",
+        description: error.message || "An error occurred while creating the room",
+        variant: "destructive",
+      });
+      console.error("Error creating room:", error);
+      // Go back to the review step if creation fails
+      setCurrentStep(2);
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   const handleCopyRoomCode = () => {
@@ -164,7 +201,7 @@ export default function CreateRoomPage() {
   };
 
   const handleNavigateToRoom = () => {
-    navigate(`/room/${roomCode}`);
+    navigate(`/room/${roomId}`);
   };
 
   return (
@@ -254,7 +291,7 @@ export default function CreateRoomPage() {
                       className={`cursor-pointer transition-all hover:border-dicey-purple ${
                         form.getValues().decisionType === type.id ? "border-2 border-dicey-purple" : ""
                       }`}
-                      onClick={() => form.setValue("decisionType", type.id)}
+                      onClick={() => form.setValue("decisionType", type.id as "dice" | "coin" | "spinner")}
                     >
                       <CardHeader className="pb-2">
                         <div className="flex justify-between items-start">
@@ -334,9 +371,9 @@ export default function CreateRoomPage() {
                       <FormLabel className="text-base">
                         Allow everyone to submit options
                       </FormLabel>
-                      <FormDescription>
+                      <p className="text-sm text-muted-foreground">
                         When disabled, only you can add options to the decision
-                      </FormDescription>
+                      </p>
                     </div>
                     <FormControl>
                       <Switch
@@ -357,9 +394,9 @@ export default function CreateRoomPage() {
                       <FormLabel className="text-base">
                         Hide results until all votes are in
                       </FormLabel>
-                      <FormDescription>
+                      <p className="text-sm text-muted-foreground">
                         For maximum suspense! Results are revealed only after everyone votes
-                      </FormDescription>
+                      </p>
                     </div>
                     <FormControl>
                       <Switch
@@ -548,7 +585,14 @@ export default function CreateRoomPage() {
                 onClick={handleNextStep}
                 disabled={isCreating}
               >
-                {isCreating ? "Creating Room..." : "Create Room"}
+                {isCreating ? (
+                  <div className="flex items-center">
+                    <Spinner size="sm" className="mr-2" />
+                    Creating Room...
+                  </div>
+                ) : (
+                  "Create Room"
+                )}
               </Button>
             )}
             
@@ -561,14 +605,5 @@ export default function CreateRoomPage() {
         </form>
       </Form>
     </div>
-  );
-}
-
-// FormDescription component for the Switch fields
-function FormDescription({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="text-sm text-muted-foreground">
-      {children}
-    </p>
   );
 }

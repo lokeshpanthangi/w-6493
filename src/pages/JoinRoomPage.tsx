@@ -1,12 +1,16 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
 import { Label } from "@/components/ui/label";
 import { Dice3D } from "@/components/ui/dice-3d";
+import { CoinFlip } from "@/components/ui/coin-flip";
+import { SpinnerWheel } from "@/components/ui/spinner-wheel";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
+import { Spinner } from "@/components/ui/spinner";
+import { getRoomByCode, joinRoom } from "@/services/api";
 
 export default function JoinRoomPage() {
   const navigate = useNavigate();
@@ -17,13 +21,21 @@ export default function JoinRoomPage() {
   const [isJoining, setIsJoining] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [roomDetails, setRoomDetails] = useState<{
+    id: string;
     name: string;
     createdBy: string;
     participants: number;
     type: "dice" | "coin" | "spinner";
   } | null>(null);
 
-  const handleCheckRoom = () => {
+  // Check the URL room code automatically
+  useEffect(() => {
+    if (urlRoomCode && urlRoomCode.length === 6) {
+      handleCheckRoom();
+    }
+  }, [urlRoomCode]);
+
+  const handleCheckRoom = async () => {
     if (roomCode.length !== 6) {
       toast({
         title: "Invalid room code",
@@ -35,32 +47,82 @@ export default function JoinRoomPage() {
 
     setIsLoading(true);
 
-    // Mock API call to get room details
-    setTimeout(() => {
-      // Mock success response
+    try {
+      const room = await getRoomByCode(roomCode);
+      
+      if (!room) {
+        toast({
+          title: "Room not found",
+          description: "No room exists with that code. Please check and try again.",
+          variant: "destructive",
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      // Get participants count
+      const participantsCount = 3; // Mock for now
+
+      // Set room details
       setRoomDetails({
-        name: "Movie Night Decision",
-        createdBy: "Alex",
-        participants: 3,
-        type: "dice",
+        id: room.id,
+        name: room.name,
+        createdBy: "Room Creator", // We'll update this with real data later
+        participants: participantsCount,
+        type: room.type as "dice" | "coin" | "spinner",
       });
+      
+    } catch (error) {
+      toast({
+        title: "Error checking room",
+        description: "Could not check room details. Please try again.",
+        variant: "destructive",
+      });
+      console.error("Error checking room:", error);
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
   };
 
-  const handleJoinRoom = () => {
+  const handleJoinRoom = async () => {
+    if (!roomDetails) return;
+    
     setIsJoining(true);
 
-    // Mock joining room
-    setTimeout(() => {
+    try {
+      // Join the room
+      await joinRoom(roomDetails.id);
+      
       toast({
         title: "Room joined!",
         description: "You've successfully joined the decision room",
       });
 
       // Navigate to the room page
-      navigate(`/room/${roomCode}`);
-    }, 1200);
+      navigate(`/room/${roomDetails.id}`);
+    } catch (error) {
+      toast({
+        title: "Failed to join room",
+        description: "There was an error joining the room. Please try again.",
+        variant: "destructive",
+      });
+      console.error("Error joining room:", error);
+    } finally {
+      setIsJoining(false);
+    }
+  };
+
+  const renderDecisionIcon = () => {
+    if (!roomDetails) return null;
+    
+    switch (roomDetails.type) {
+      case "dice":
+        return <Dice3D size="sm" />;
+      case "coin":
+        return <CoinFlip size="sm" />;
+      case "spinner":
+        return <div className="spinner-wheel w-6 h-6"></div>;
+    }
   };
 
   return (
@@ -102,7 +164,14 @@ export default function JoinRoomPage() {
               onClick={handleCheckRoom}
               disabled={roomCode.length !== 6 || isLoading}
             >
-              {isLoading ? "Checking Code..." : "Check Room"}
+              {isLoading ? (
+                <div className="flex items-center">
+                  <Spinner size="sm" className="mr-2" />
+                  Checking Code...
+                </div>
+              ) : (
+                "Check Room"
+              )}
             </Button>
           ) : (
             <div className="space-y-4">
@@ -112,7 +181,7 @@ export default function JoinRoomPage() {
                     <h3 className="font-medium">{roomDetails.name}</h3>
                     <p className="text-sm text-muted-foreground">Created by {roomDetails.createdBy}</p>
                   </div>
-                  <Dice3D size="sm" />
+                  {renderDecisionIcon()}
                 </div>
                 <div className="text-sm">
                   <p>{roomDetails.participants} participants already in room</p>
@@ -135,7 +204,14 @@ export default function JoinRoomPage() {
                   onClick={handleJoinRoom}
                   disabled={isJoining}
                 >
-                  {isJoining ? "Joining..." : "Join Room"}
+                  {isJoining ? (
+                    <div className="flex items-center">
+                      <Spinner size="sm" className="mr-2" />
+                      Joining...
+                    </div>
+                  ) : (
+                    "Join Room"
+                  )}
                 </Button>
               </div>
             </div>

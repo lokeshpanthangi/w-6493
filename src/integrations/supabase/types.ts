@@ -9,13 +9,229 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      decisions: {
+        Row: {
+          decided_at: string
+          id: string
+          room_id: string
+          tie_breaker_type: string | null
+          tie_breaker_used: boolean
+          winning_option_id: string | null
+        }
+        Insert: {
+          decided_at?: string
+          id?: string
+          room_id: string
+          tie_breaker_type?: string | null
+          tie_breaker_used?: boolean
+          winning_option_id?: string | null
+        }
+        Update: {
+          decided_at?: string
+          id?: string
+          room_id?: string
+          tie_breaker_type?: string | null
+          tie_breaker_used?: boolean
+          winning_option_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "decisions_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: true
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "decisions_winning_option_id_fkey"
+            columns: ["winning_option_id"]
+            isOneToOne: false
+            referencedRelation: "options"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      options: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          room_id: string
+          text: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          room_id: string
+          text: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          room_id?: string
+          text?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "options_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      participants: {
+        Row: {
+          has_submitted: boolean
+          has_voted: boolean
+          id: string
+          is_ready: boolean
+          joined_at: string
+          room_id: string
+          user_id: string
+        }
+        Insert: {
+          has_submitted?: boolean
+          has_voted?: boolean
+          id?: string
+          is_ready?: boolean
+          joined_at?: string
+          room_id: string
+          user_id: string
+        }
+        Update: {
+          has_submitted?: boolean
+          has_voted?: boolean
+          id?: string
+          is_ready?: boolean
+          joined_at?: string
+          room_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "participants_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          full_name: string | null
+          id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          full_name?: string | null
+          id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          full_name?: string | null
+          id?: string
+        }
+        Relationships: []
+      }
+      rooms: {
+        Row: {
+          allow_everyone_to_submit: boolean
+          code: string
+          created_at: string
+          created_by: string
+          description: string | null
+          expires_at: string | null
+          hide_results_until_end: boolean
+          id: string
+          name: string
+          phase: string
+          type: string
+        }
+        Insert: {
+          allow_everyone_to_submit?: boolean
+          code: string
+          created_at?: string
+          created_by: string
+          description?: string | null
+          expires_at?: string | null
+          hide_results_until_end?: boolean
+          id?: string
+          name: string
+          phase?: string
+          type: string
+        }
+        Update: {
+          allow_everyone_to_submit?: boolean
+          code?: string
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          expires_at?: string | null
+          hide_results_until_end?: boolean
+          id?: string
+          name?: string
+          phase?: string
+          type?: string
+        }
+        Relationships: []
+      }
+      votes: {
+        Row: {
+          created_at: string
+          id: string
+          option_id: string
+          room_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          option_id: string
+          room_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          option_id?: string
+          room_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "votes_option_id_fkey"
+            columns: ["option_id"]
+            isOneToOne: false
+            referencedRelation: "options"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "votes_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      generate_room_code: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
     }
     Enums: {
       [_ in never]: never
