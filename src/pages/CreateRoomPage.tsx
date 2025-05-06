@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { 
   Card, 
   CardContent, 
@@ -12,16 +13,34 @@ import {
   CardHeader, 
   CardTitle 
 } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useToast } from "@/components/ui/use-toast";
 import { Dice3D } from "@/components/ui/dice-3d";
 import { CoinFlip } from "@/components/ui/coin-flip";
 import { SpinnerWheel } from "@/components/ui/spinner-wheel";
-import { useToast } from "@/components/ui/use-toast";
+import { RoomCodeDisplay } from "@/components/room/RoomCodeDisplay";
+import { Progress } from "@/components/ui/progress";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { useForm } from "react-hook-form";
+import { Check, Clock, Copy, Plus, Share, Users, X } from "lucide-react";
 
 interface DecisionTypeOption {
   id: string;
   name: string;
   description: string;
   icon: JSX.Element;
+}
+
+interface RoomFormValues {
+  name: string;
+  description: string;
+  maxParticipants: number;
+  timeLimit: number;
+  decisionType: string;
+  allowEveryoneToSubmit: boolean;
+  hideResultsUntilEnd: boolean;
 }
 
 const decisionTypes: DecisionTypeOption[] = [
@@ -45,16 +64,36 @@ const decisionTypes: DecisionTypeOption[] = [
   },
 ];
 
+const STEPS = [
+  { id: "basics", name: "Room Basics" },
+  { id: "settings", name: "Settings" },
+  { id: "review", name: "Review & Create" },
+  { id: "share", name: "Share Room" },
+];
+
 export default function CreateRoomPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [roomName, setRoomName] = useState("");
-  const [roomDescription, setRoomDescription] = useState("");
-  const [selectedType, setSelectedType] = useState<string>("");
+  
+  const [currentStep, setCurrentStep] = useState(0);
   const [isCreating, setIsCreating] = useState(false);
+  const [roomCreated, setRoomCreated] = useState(false);
+  const [roomCode, setRoomCode] = useState("");
+  
+  const form = useForm<RoomFormValues>({
+    defaultValues: {
+      name: "",
+      description: "",
+      maxParticipants: 0, // 0 means unlimited
+      timeLimit: 30, // 30 minutes default
+      decisionType: "",
+      allowEveryoneToSubmit: true,
+      hideResultsUntilEnd: false,
+    },
+  });
 
-  const handleCreateRoom = () => {
-    if (!roomName.trim()) {
+  const handleNextStep = () => {
+    if (currentStep === 0 && !form.getValues().name) {
       toast({
         title: "Room name required",
         description: "Please enter a name for your decision room",
@@ -63,7 +102,7 @@ export default function CreateRoomPage() {
       return;
     }
 
-    if (!selectedType) {
+    if (currentStep === 0 && !form.getValues().decisionType) {
       toast({
         title: "Decision type required",
         description: "Please select a decision method for your room",
@@ -71,18 +110,61 @@ export default function CreateRoomPage() {
       });
       return;
     }
+    
+    if (currentStep < STEPS.length - 1) {
+      setCurrentStep(currentStep + 1);
+      
+      // If we're moving to the final step, simulate room creation
+      if (currentStep === STEPS.length - 2) {
+        handleCreateRoom();
+      }
+    }
+  };
 
+  const handlePreviousStep = () => {
+    if (currentStep > 0) {
+      setCurrentStep(currentStep - 1);
+    }
+  };
+
+  const handleCreateRoom = () => {
     setIsCreating(true);
 
     // Mock room creation - would be replaced with actual API call
     setTimeout(() => {
+      // Generate a random 6-character alphanumeric room code
+      const generatedRoomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+      setRoomCode(generatedRoomCode);
+      
       toast({
         title: "Room created!",
-        description: `Your ${selectedType} decision room is ready.`,
+        description: `Your ${form.getValues().decisionType} decision room is ready to share.`,
       });
-      // Navigate to the new room (In a real app, this would use the actual room ID)
-      navigate("/dashboard");
+      
+      setIsCreating(false);
+      setRoomCreated(true);
     }, 1500);
+  };
+
+  const handleCopyRoomCode = () => {
+    navigator.clipboard.writeText(roomCode);
+    toast({
+      title: "Copied!",
+      description: "Room code copied to clipboard",
+    });
+  };
+
+  const handleCopyInviteLink = () => {
+    const inviteLink = `${window.location.origin}/join/${roomCode}`;
+    navigator.clipboard.writeText(inviteLink);
+    toast({
+      title: "Copied!",
+      description: "Invite link copied to clipboard",
+    });
+  };
+
+  const handleNavigateToRoom = () => {
+    navigate(`/room/${roomCode}`);
   };
 
   return (
@@ -94,62 +176,399 @@ export default function CreateRoomPage() {
         </p>
       </div>
 
-      <div className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="roomName">Room Name</Label>
-          <Input
-            id="roomName"
-            placeholder="e.g., Dinner Plans, Movie Night, Vacation Destination"
-            value={roomName}
-            onChange={(e) => setRoomName(e.target.value)}
-          />
+      {/* Progress bar */}
+      <div className="space-y-2">
+        <div className="flex justify-between text-xs text-muted-foreground">
+          <span>Step {currentStep + 1} of {STEPS.length}</span>
+          <span>{STEPS[currentStep].name}</span>
         </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="roomDescription">Description (Optional)</Label>
-          <Textarea
-            id="roomDescription"
-            placeholder="What are you deciding on? Add any details for participants."
-            value={roomDescription}
-            onChange={(e) => setRoomDescription(e.target.value)}
-            rows={3}
-          />
+        <Progress value={(currentStep + 1) / STEPS.length * 100} className="h-2" />
+        
+        <div className="hidden md:flex justify-between mt-2">
+          {STEPS.map((step, index) => (
+            <div 
+              key={step.id}
+              className={`flex items-center gap-1 ${
+                index <= currentStep ? "text-primary" : "text-muted-foreground"
+              }`}
+            >
+              <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs ${
+                index <= currentStep ? "bg-primary text-primary-foreground" : "bg-muted"
+              }`}>
+                {index < currentStep ? <Check className="h-3 w-3" /> : index + 1}
+              </div>
+              <span className="text-xs font-medium">{step.name}</span>
+            </div>
+          ))}
         </div>
+      </div>
 
-        <div className="space-y-2">
-          <Label>Decision Method</Label>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {decisionTypes.map((type) => (
-              <Card 
-                key={type.id}
-                className={`cursor-pointer transition-all hover:border-dicey-purple ${
-                  selectedType === type.id ? "border-2 border-dicey-purple" : ""
-                }`}
-                onClick={() => setSelectedType(type.id)}
-              >
-                <CardHeader className="pb-2">
-                  <div className="flex justify-between items-start">
-                    <CardTitle className="text-lg">{type.name}</CardTitle>
-                    <div>{type.icon}</div>
-                  </div>
+      <Separator />
+
+      <Form {...form}>
+        <form className="space-y-6">
+          {/* Step 1: Room Basics */}
+          {currentStep === 0 && (
+            <div className="space-y-6">
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem className="space-y-2">
+                    <FormLabel>Room Name</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="e.g., Dinner Plans, Movie Night, Vacation Destination"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem className="space-y-2">
+                    <FormLabel>Description <span className="text-muted-foreground text-xs">(Optional)</span></FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder="What are you deciding on? Add any details for participants."
+                        rows={3}
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="space-y-2">
+                <Label>Decision Method</Label>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {decisionTypes.map((type) => (
+                    <Card 
+                      key={type.id}
+                      className={`cursor-pointer transition-all hover:border-dicey-purple ${
+                        form.getValues().decisionType === type.id ? "border-2 border-dicey-purple" : ""
+                      }`}
+                      onClick={() => form.setValue("decisionType", type.id)}
+                    >
+                      <CardHeader className="pb-2">
+                        <div className="flex justify-between items-start">
+                          <CardTitle className="text-lg">{type.name}</CardTitle>
+                          <div>{type.icon}</div>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <CardDescription>{type.description}</CardDescription>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Step 2: Room Settings */}
+          {currentStep === 1 && (
+            <div className="space-y-6">
+              <FormField
+                control={form.control}
+                name="maxParticipants"
+                render={({ field }) => (
+                  <FormItem className="space-y-2">
+                    <FormLabel>Maximum Participants</FormLabel>
+                    <div className="flex items-center gap-2">
+                      <Users className="h-4 w-4 text-muted-foreground" />
+                      <Input
+                        type="number"
+                        min="0"
+                        max="100"
+                        placeholder="0 (unlimited)"
+                        {...field}
+                        onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Enter 0 for unlimited participants
+                    </p>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="timeLimit"
+                render={({ field }) => (
+                  <FormItem className="space-y-2">
+                    <FormLabel>Time Limit (minutes)</FormLabel>
+                    <div className="flex items-center gap-2">
+                      <Clock className="h-4 w-4 text-muted-foreground" />
+                      <Input
+                        type="number"
+                        min="5"
+                        max="120"
+                        placeholder="30"
+                        {...field}
+                        onChange={(e) => field.onChange(parseInt(e.target.value) || 30)}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      How long will this decision room stay active?
+                    </p>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="allowEveryoneToSubmit"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                    <div className="space-y-0.5">
+                      <FormLabel className="text-base">
+                        Allow everyone to submit options
+                      </FormLabel>
+                      <FormDescription>
+                        When disabled, only you can add options to the decision
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="hideResultsUntilEnd"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                    <div className="space-y-0.5">
+                      <FormLabel className="text-base">
+                        Hide results until all votes are in
+                      </FormLabel>
+                      <FormDescription>
+                        For maximum suspense! Results are revealed only after everyone votes
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+            </div>
+          )}
+
+          {/* Step 3: Review & Create */}
+          {currentStep === 2 && (
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Room Details</CardTitle>
+                  <CardDescription>Review your decision room setup before creating</CardDescription>
                 </CardHeader>
-                <CardContent>
-                  <CardDescription>{type.description}</CardDescription>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <h3 className="text-sm font-medium text-muted-foreground">Name</h3>
+                      <p>{form.getValues().name}</p>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <h3 className="text-sm font-medium text-muted-foreground">Decision Method</h3>
+                      <div className="flex items-center gap-2">
+                        {form.getValues().decisionType === "dice" && <Dice3D size="sm" />}
+                        {form.getValues().decisionType === "coin" && <CoinFlip size="sm" />}
+                        {form.getValues().decisionType === "spinner" && <div className="spinner-wheel w-6 h-6"></div>}
+                        <span>
+                          {decisionTypes.find(t => t.id === form.getValues().decisionType)?.name}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    {form.getValues().description && (
+                      <div className="space-y-2 md:col-span-2">
+                        <h3 className="text-sm font-medium text-muted-foreground">Description</h3>
+                        <p>{form.getValues().description}</p>
+                      </div>
+                    )}
+                    
+                    <div className="space-y-2">
+                      <h3 className="text-sm font-medium text-muted-foreground">Time Limit</h3>
+                      <div className="flex items-center gap-2">
+                        <Clock className="h-4 w-4 text-muted-foreground" />
+                        <span>{form.getValues().timeLimit} minutes</span>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <h3 className="text-sm font-medium text-muted-foreground">Max Participants</h3>
+                      <div className="flex items-center gap-2">
+                        <Users className="h-4 w-4 text-muted-foreground" />
+                        <span>
+                          {form.getValues().maxParticipants > 0 
+                            ? form.getValues().maxParticipants 
+                            : "Unlimited"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <Separator />
+                  
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-medium">Room Settings</h3>
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center gap-2">
+                        {form.getValues().allowEveryoneToSubmit ? (
+                          <Badge variant="outline" className="bg-green-50 text-green-700 hover:bg-green-50">
+                            <Check className="h-3 w-3 mr-1" />
+                            Everyone can submit options
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="bg-yellow-50 text-yellow-700 hover:bg-yellow-50">
+                            <X className="h-3 w-3 mr-1" />
+                            Only you can submit options
+                          </Badge>
+                        )}
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        {form.getValues().hideResultsUntilEnd ? (
+                          <Badge variant="outline" className="bg-blue-50 text-blue-700 hover:bg-blue-50">
+                            <Check className="h-3 w-3 mr-1" />
+                            Results hidden until all votes are in
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline">
+                            <X className="h-3 w-3 mr-1" />
+                            Results visible during voting
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
-            ))}
-          </div>
-        </div>
+            </div>
+          )}
 
-        <Button 
-          className="w-full mt-6" 
-          size="lg"
-          onClick={handleCreateRoom}
-          disabled={isCreating}
-        >
-          {isCreating ? "Creating Room..." : "Create Room"}
-        </Button>
-      </div>
+          {/* Step 4: Share Room */}
+          {currentStep === 3 && (
+            <div className="space-y-6">
+              <Card className="border-dicey-purple-dark/30 bg-gradient-to-br from-white to-dicey-purple-light/20">
+                <CardHeader className="text-center pb-2">
+                  <div className="mx-auto mb-2">
+                    {form.getValues().decisionType === "dice" && <Dice3D size="lg" />}
+                    {form.getValues().decisionType === "coin" && <CoinFlip size="lg" />}
+                    {form.getValues().decisionType === "spinner" && (
+                      <SpinnerWheel size="lg" options={["Ready!", "To Go!", "Decide!"]} />
+                    )}
+                  </div>
+                  <CardTitle className="text-2xl">Your Room is Ready!</CardTitle>
+                  <CardDescription>Share this room code with others to join</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <RoomCodeDisplay code={roomCode} onCopy={handleCopyRoomCode} />
+                  
+                  <Tabs defaultValue="link" className="w-full">
+                    <TabsList className="grid w-full grid-cols-2">
+                      <TabsTrigger value="link">Invite Link</TabsTrigger>
+                      <TabsTrigger value="qrcode">QR Code</TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="link" className="space-y-4">
+                      <div className="flex space-x-2 mt-4">
+                        <Input 
+                          readOnly 
+                          value={`${window.location.origin}/join/${roomCode}`} 
+                          className="bg-muted"
+                        />
+                        <Button variant="outline" size="icon" onClick={handleCopyInviteLink}>
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <p className="text-sm text-center text-muted-foreground">
+                        Share this link with your friends to join the decision room
+                      </p>
+                    </TabsContent>
+                    <TabsContent value="qrcode" className="flex flex-col items-center justify-center py-2">
+                      <div className="bg-white p-4 rounded-lg">
+                        {/* QR code would be rendered here in a real implementation */}
+                        <div className="w-48 h-48 border-2 border-dashed border-dicey-purple flex items-center justify-center">
+                          <p className="text-center text-sm text-muted-foreground">QR code for room<br/>{roomCode}</p>
+                        </div>
+                      </div>
+                      <p className="text-sm text-center text-muted-foreground mt-4">
+                        Scan this code with a phone camera to join
+                      </p>
+                    </TabsContent>
+                  </Tabs>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          <div className="flex justify-between pt-4">
+            {currentStep > 0 && currentStep < STEPS.length - 1 && (
+              <Button type="button" variant="outline" onClick={handlePreviousStep}>
+                Back
+              </Button>
+            )}
+            
+            {currentStep === 0 && (
+              <Button type="button" variant="outline" onClick={() => navigate("/dashboard")}>
+                Cancel
+              </Button>
+            )}
+            
+            {currentStep < STEPS.length - 2 && (
+              <Button type="button" className="ml-auto" onClick={handleNextStep}>
+                Continue
+              </Button>
+            )}
+            
+            {currentStep === STEPS.length - 2 && (
+              <Button 
+                type="button" 
+                className="ml-auto" 
+                onClick={handleNextStep}
+                disabled={isCreating}
+              >
+                {isCreating ? "Creating Room..." : "Create Room"}
+              </Button>
+            )}
+            
+            {currentStep === STEPS.length - 1 && (
+              <Button type="button" onClick={handleNavigateToRoom}>
+                Go to Room
+              </Button>
+            )}
+          </div>
+        </form>
+      </Form>
     </div>
+  );
+}
+
+// FormDescription component for the Switch fields
+function FormDescription({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-sm text-muted-foreground">
+      {children}
+    </p>
   );
 }

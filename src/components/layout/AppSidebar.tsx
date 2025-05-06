@@ -28,7 +28,7 @@ export function AppSidebar() {
   };
 
   return (
-    <Sidebar defaultCollapsed={false} className="border-r">
+    <Sidebar className="border-r">
       <SidebarHeader className="p-4 flex items-center gap-2">
         <div className="flex items-center gap-2">
           <Dice3D size="sm" className="shrink-0" />
