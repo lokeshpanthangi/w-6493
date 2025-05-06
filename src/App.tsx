@@ -18,13 +18,16 @@ import ProfilePage from "./pages/ProfilePage";
 import HistoryPage from "./pages/HistoryPage";
 import NotFound from "./pages/NotFound";
 
+// CSS for animations
+import "./animations.css";
+
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
-      <Sonner />
+      <Sonner position="top-center" closeButton richColors />
       <BrowserRouter>
         <Routes>
           {/* Public Routes */}
