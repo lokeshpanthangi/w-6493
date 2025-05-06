@@ -69,6 +69,15 @@ const handleError = (error: PostgrestError | null) => {
   }
 };
 
+// Get current user ID helper
+const getCurrentUserId = async (): Promise<string> => {
+  const { data } = await supabase.auth.getUser();
+  if (!data.user) {
+    throw new Error("User not authenticated");
+  }
+  return data.user.id;
+};
+
 // Rooms
 export const createRoom = async (
   roomData: Omit<Room, "id" | "code" | "created_at" | "created_by" | "phase">
@@ -76,14 +85,16 @@ export const createRoom = async (
   // Generate a random 6-character code
   const { data: codeData, error: codeError } = await supabase.rpc('generate_room_code');
   handleError(codeError);
-
+  
   const code = codeData || Math.random().toString(36).substring(2, 8).toUpperCase();
+  const userId = await getCurrentUserId();
   
   const { data, error } = await supabase
     .from("rooms")
     .insert({
       ...roomData,
       code,
+      created_by: userId, // Add the created_by field with the current user's ID
     })
     .select("*")
     .single();
@@ -145,10 +156,13 @@ export const getUserRooms = async (type: "active" | "recent" = "active"): Promis
 
 // Participants
 export const joinRoom = async (roomId: string): Promise<Participant> => {
+  const userId = await getCurrentUserId();
+  
   const { data, error } = await supabase
     .from("participants")
     .insert({
       room_id: roomId,
+      user_id: userId, // Add the user_id field with the current user's ID
     })
     .select("*")
     .single();
@@ -162,23 +176,35 @@ export const getRoomParticipants = async (roomId: string): Promise<Participant[]
     .from("participants")
     .select(`
       *,
-      profiles (*)
+      profiles:user_id(*)
     `)
     .eq("room_id", roomId);
 
   handleError(error);
-  return data as Participant[];
+  
+  // Transform the data to match the Participant type
+  const participants = data?.map(participant => {
+    const { profiles, ...rest } = participant;
+    return {
+      ...rest,
+      profiles: profiles as unknown as Profile,
+    };
+  }) || [];
+  
+  return participants as Participant[];
 };
 
 export const updateParticipantStatus = async (
   roomId: string,
   updates: Partial<Participant>
 ): Promise<Participant> => {
+  const userId = await getCurrentUserId();
+  
   const { data, error } = await supabase
     .from("participants")
     .update(updates)
     .eq("room_id", roomId)
-    .eq("user_id", (await supabase.auth.getUser()).data.user?.id)
+    .eq("user_id", userId)
     .select("*")
     .single();
 
@@ -191,11 +217,14 @@ export const createOption = async (
   roomId: string,
   text: string
 ): Promise<Option> => {
+  const userId = await getCurrentUserId();
+  
   const { data, error } = await supabase
     .from("options")
     .insert({
       room_id: roomId,
       text,
+      created_by: userId, // Add the created_by field with the current user's ID
     })
     .select("*")
     .single();
@@ -209,12 +238,22 @@ export const getRoomOptions = async (roomId: string): Promise<Option[]> => {
     .from("options")
     .select(`
       *,
-      profiles (*)
+      profiles:created_by(*)
     `)
     .eq("room_id", roomId);
 
   handleError(error);
-  return data as Option[];
+  
+  // Transform the data to match the Option type
+  const options = data?.map(option => {
+    const { profiles, ...rest } = option;
+    return {
+      ...rest,
+      profiles: profiles as unknown as Profile,
+    };
+  }) || [];
+  
+  return options as Option[];
 };
 
 export const updateOption = async (
@@ -246,11 +285,14 @@ export const castVote = async (
   roomId: string,
   optionId: string
 ): Promise<Vote> => {
+  const userId = await getCurrentUserId();
+  
   const { data, error } = await supabase
     .from("votes")
     .insert({
       room_id: roomId,
       option_id: optionId,
+      user_id: userId, // Add the user_id field with the current user's ID
     })
     .select("*")
     .single();
@@ -326,11 +368,14 @@ export const getUserDecisionsHistory = async (): Promise<{
   options: Option[];
   participants: Participant[];
 }> => {
+  // Get current user ID
+  const userId = await getCurrentUserId();
+  
   // Get all rooms with decisions where the user participated
   const { data: participatedRooms, error: participatedError } = await supabase
     .from("participants")
     .select("room_id")
-    .eq("user_id", (await supabase.auth.getUser()).data.user?.id);
+    .eq("user_id", userId);
   
   handleError(participatedError);
   
@@ -364,26 +409,43 @@ export const getUserDecisionsHistory = async (): Promise<{
   handleError(decisionsError);
   
   // Get options for these rooms
-  const { data: options, error: optionsError } = await supabase
+  const { data: optionsData, error: optionsError } = await supabase
     .from("options")
     .select(`
       *,
-      profiles (*)
+      profiles:created_by(*)
     `)
     .in("room_id", finalRoomIds);
   
   handleError(optionsError);
   
   // Get participants for these rooms
-  const { data: participants, error: participantsError } = await supabase
+  const { data: participantsData, error: participantsError } = await supabase
     .from("participants")
     .select(`
       *,
-      profiles (*)
+      profiles:user_id(*)
     `)
     .in("room_id", finalRoomIds);
   
   handleError(participantsError);
+  
+  // Transform the data to match the required types
+  const options = optionsData?.map(option => {
+    const { profiles, ...rest } = option;
+    return {
+      ...rest,
+      profiles: profiles as unknown as Profile,
+    };
+  }) || [];
+  
+  const participants = participantsData?.map(participant => {
+    const { profiles, ...rest } = participant;
+    return {
+      ...rest,
+      profiles: profiles as unknown as Profile,
+    };
+  }) || [];
   
   return {
     rooms: rooms as Room[],
@@ -408,10 +470,12 @@ export const getProfile = async (userId: string): Promise<Profile | null> => {
 export const updateProfile = async (
   updates: Partial<Omit<Profile, "id" | "created_at">>
 ): Promise<Profile> => {
+  const userId = await getCurrentUserId();
+  
   const { data, error } = await supabase
     .from("profiles")
     .update(updates)
-    .eq("id", (await supabase.auth.getUser()).data.user?.id)
+    .eq("id", userId)
     .select("*")
     .single();
 
