@@ -152,6 +152,7 @@ export type Database = {
           expires_at: string | null
           hide_results_until_end: boolean
           id: string
+          max_participants: number | null
           name: string
           phase: string
           type: string
@@ -165,6 +166,7 @@ export type Database = {
           expires_at?: string | null
           hide_results_until_end?: boolean
           id?: string
+          max_participants?: number | null
           name: string
           phase?: string
           type: string
@@ -178,6 +180,7 @@ export type Database = {
           expires_at?: string | null
           hide_results_until_end?: boolean
           id?: string
+          max_participants?: number | null
           name?: string
           phase?: string
           type?: string

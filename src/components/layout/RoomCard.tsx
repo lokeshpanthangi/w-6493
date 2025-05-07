@@ -1,3 +1,4 @@
+
 import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,7 +21,7 @@ export function RoomCard({
   name,
   description,
   createdBy,
-  participants,
+  participants = [], // Provide default empty array to avoid undefined errors
   active = false,
   type,
   onJoin,
@@ -44,19 +45,25 @@ export function RoomCard({
       </CardHeader>
       <CardContent className="pb-2">
         <div className="flex items-center -space-x-2">
-          {participants.slice(0, 5).map((participant, i) => (
-            <UserAvatar
-              key={`${id}-participant-${i}`}
-              name={participant.name}
-              src={participant.avatar}
-              size="xs"
-              status={participant.status}
-            />
-          ))}
-          {participants.length > 5 && (
-            <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center text-xs text-muted-foreground ml-1">
-              +{participants.length - 5}
-            </div>
+          {participants && participants.length > 0 ? (
+            <>
+              {participants.slice(0, 5).map((participant, i) => (
+                <UserAvatar
+                  key={`${id}-participant-${i}`}
+                  name={participant.name}
+                  src={participant.avatar}
+                  size="xs"
+                  status={participant.status}
+                />
+              ))}
+              {participants.length > 5 && (
+                <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center text-xs text-muted-foreground ml-1">
+                  +{participants.length - 5}
+                </div>
+              )}
+            </>
+          ) : (
+            <span className="text-xs text-muted-foreground">No participants yet</span>
           )}
         </div>
       </CardContent>

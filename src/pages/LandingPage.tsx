@@ -5,6 +5,9 @@ import { Dice3D } from "@/components/ui/dice-3d";
 import { CoinFlip } from "@/components/ui/coin-flip";
 
 export default function LandingPage() {
+  // Ensure we have a valid current year for the footer
+  const currentYear = new Date().getFullYear();
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-white to-dicey-purple-light/10">
       {/* Header */}
@@ -167,7 +170,7 @@ export default function LandingPage() {
           </div>
 
           <div className="border-t border-gray-700 mt-8 pt-8 text-center md:text-left text-gray-400">
-            <p>&copy; {new Date().getFullYear()} DiceyDecisions. All rights reserved.</p>
+            <p>&copy; {currentYear} DiceyDecisions. All rights reserved.</p>
           </div>
         </div>
       </footer>

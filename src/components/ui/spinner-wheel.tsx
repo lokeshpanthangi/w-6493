@@ -14,7 +14,7 @@ interface SpinnerWheelProps {
 export function SpinnerWheel({ 
   className, 
   size = "md", 
-  options = ["A", "B", "C", "D", "E", "F"], 
+  options = ["A", "B", "C", "D", "E", "F"], // Ensure default options
   onSpin,
   tiebreaker = false
 }: SpinnerWheelProps) {
@@ -22,6 +22,9 @@ export function SpinnerWheel({
   const [rotation, setRotation] = useState(0);
   const [result, setResult] = useState<string | null>(null);
   const [spinCount, setSpinCount] = useState(0);
+  
+  // Make sure options is never undefined and always has at least one element
+  const safeOptions = options && options.length > 0 ? options : ["Option"];
   
   const sizeClasses = {
     sm: "w-20 h-20",
@@ -43,9 +46,9 @@ export function SpinnerWheel({
     // Calculate the result based on the final rotation
     setTimeout(() => {
       const normalizedRotation = newRotation % 360;
-      const segmentSize = 360 / options.length;
+      const segmentSize = 360 / safeOptions.length;
       const resultIndex = Math.floor(normalizedRotation / segmentSize);
-      const resultValue = options[resultIndex];
+      const resultValue = safeOptions[resultIndex];
       
       setResult(resultValue);
       setSpinning(false);
@@ -74,8 +77,8 @@ export function SpinnerWheel({
             transition: spinning ? "transform 3s cubic-bezier(0.2, 0.8, 0.2, 1)" : "none"
           }}
         >
-          {options.map((option, index) => {
-            const angle = (360 / options.length) * index;
+          {safeOptions.map((option, index) => {
+            const angle = (360 / safeOptions.length) * index;
             const segmentColor = index % 2 === 0 
               ? "bg-dicey-purple-dark" 
               : "bg-dicey-purple";

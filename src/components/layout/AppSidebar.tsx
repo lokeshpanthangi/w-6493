@@ -1,3 +1,4 @@
+
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { Home, Plus, History, User } from "lucide-react";
@@ -28,6 +29,11 @@ export function AppSidebar() {
   const isActive = (path: string) => {
     return location.pathname === path;
   };
+
+  // Safe access to user metadata
+  const userName = user?.user_metadata?.full_name || "User";
+  const userEmail = user?.email || "";
+  const userAvatar = user?.user_metadata?.avatar_url || "";
 
   return (
     <Sidebar className="border-r">
@@ -76,14 +82,14 @@ export function AppSidebar() {
         <Link to="/profile">
           <div className="flex items-center gap-3 cursor-pointer p-2 rounded-md hover:bg-muted">
             <UserAvatar 
-              src={user?.user_metadata?.avatar_url || ""} 
-              name={user?.user_metadata?.full_name || "User"} 
+              src={userAvatar} 
+              name={userName} 
               status="online" 
               size="sm" 
             />
             <div className="flex flex-col">
-              <span className="text-sm font-medium">{user?.user_metadata?.full_name || "User"}</span>
-              <span className="text-xs text-muted-foreground">{user?.email || ""}</span>
+              <span className="text-sm font-medium">{userName}</span>
+              <span className="text-xs text-muted-foreground">{userEmail}</span>
             </div>
           </div>
         </Link>
