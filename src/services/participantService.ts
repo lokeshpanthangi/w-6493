@@ -26,41 +26,59 @@ export const joinRoom = async (roomId: string): Promise<Participant> => {
       room_id: roomId,
       user_id: userId,
     })
-    .select("*")
+    .select()
     .single();
 
   handleError(error);
-  return data as Participant;
+  
+  // Fetch the profile data separately to avoid recursion
+  const { data: profileData } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", userId)
+    .single();
+    
+  // Manually construct the participant object with profile
+  const participant = {
+    ...data,
+    profiles: profileData as Profile
+  } as Participant;
+  
+  return participant;
 };
 
 export const getRoomParticipants = async (roomId: string): Promise<Participant[]> => {
-  // Use a simple join query without self-reference to avoid infinite recursion
-  const { data, error } = await supabase
+  // Fetch participants
+  const { data: participantsData, error } = await supabase
     .from("participants")
-    .select(`
-      id,
-      room_id,
-      user_id,
-      joined_at,
-      is_ready,
-      has_voted,
-      has_submitted,
-      profiles:user_id(id, full_name, avatar_url, created_at)
-    `)
+    .select("*")
     .eq("room_id", roomId);
 
   handleError(error);
   
-  // Transform the data to match the Participant type
-  const participants = data?.map(participant => {
-    const { profiles, ...rest } = participant;
-    return {
-      ...rest,
-      profiles: profiles as unknown as Profile,
-    };
-  }) || [];
+  if (!participantsData || participantsData.length === 0) {
+    return [];
+  }
   
-  return participants as Participant[];
+  // Fetch profiles separately
+  const userIds = participantsData.map(p => p.user_id);
+  const { data: profilesData } = await supabase
+    .from("profiles")
+    .select("*")
+    .in("id", userIds);
+  
+  const profilesMap: Record<string, Profile> = {};
+  profilesData?.forEach(profile => {
+    profilesMap[profile.id] = profile as Profile;
+  });
+  
+  // Combine participants with their profiles
+  const participants = participantsData.map(participant => ({
+    ...participant,
+    profiles: profilesMap[participant.user_id] as Profile
+  })) as Participant[];
+  
+  return participants;
 };
 
 export const updateParticipantStatus = async (
@@ -74,9 +92,23 @@ export const updateParticipantStatus = async (
     .update(updates)
     .eq("room_id", roomId)
     .eq("user_id", userId)
-    .select("*")
+    .select()
     .single();
 
   handleError(error);
-  return data as Participant;
+  
+  // Fetch the profile data separately
+  const { data: profileData } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", userId)
+    .single();
+  
+  // Manually construct the participant object with profile
+  const participant = {
+    ...data,
+    profiles: profileData as Profile
+  } as Participant;
+  
+  return participant;
 };

@@ -17,7 +17,7 @@ export const castVote = async (
       option_id: optionId,
       user_id: userId,
     })
-    .select("*")
+    .select()
     .single();
 
   handleError(error);
@@ -31,7 +31,7 @@ export const castVote = async (
 export const getRoomVotes = async (roomId: string): Promise<Vote[]> => {
   const { data, error } = await supabase
     .from("votes")
-    .select("*")
+    .select()
     .eq("room_id", roomId);
 
   handleError(error);

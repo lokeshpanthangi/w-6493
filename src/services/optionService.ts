@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { Option, Profile } from "./types";
 import { handleError, getCurrentUserId } from "./utils";
@@ -17,7 +16,7 @@ export const createOption = async (
       text,
       created_by: userId,
     })
-    .select("*")
+    .select()
     .single();
 
   handleError(error);
@@ -30,34 +29,57 @@ export const createOption = async (
     // Don't fail the request if this fails
   }
   
-  return data as Option;
+  // Fetch the creator's profile separately
+  const { data: profileData } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", userId)
+    .single();
+  
+  // Manually construct the option with profile
+  const option = {
+    ...data,
+    profiles: profileData as Profile
+  } as Option;
+  
+  return option;
 };
 
 export const getRoomOptions = async (roomId: string): Promise<Option[]> => {
-  const { data, error } = await supabase
+  // Fetch options
+  const { data: optionsData, error } = await supabase
     .from("options")
-    .select(`
-      id,
-      room_id,
-      text,
-      created_by,
-      created_at,
-      profiles:created_by(id, full_name, avatar_url, created_at)
-    `)
+    .select("*")
     .eq("room_id", roomId);
 
   handleError(error);
   
-  // Transform the data to match the Option type
-  const options = data?.map(option => {
-    const { profiles, ...rest } = option;
-    return {
-      ...rest,
-      profiles: profiles as unknown as Profile,
-    };
-  }) || [];
+  if (!optionsData || optionsData.length === 0) {
+    return [];
+  }
   
-  return options as Option[];
+  // Get unique creator IDs
+  const creatorIds = [...new Set(optionsData.map(o => o.created_by))];
+  
+  // Fetch profiles separately
+  const { data: profilesData } = await supabase
+    .from("profiles")
+    .select("*")
+    .in("id", creatorIds);
+  
+  // Create a map for quick profile lookups
+  const profilesMap: Record<string, Profile> = {};
+  profilesData?.forEach(profile => {
+    profilesMap[profile.id] = profile as Profile;
+  });
+  
+  // Combine options with creator profiles
+  const options = optionsData.map(option => ({
+    ...option,
+    profiles: profilesMap[option.created_by] as Profile
+  })) as Option[];
+  
+  return options;
 };
 
 export const updateOption = async (
@@ -68,7 +90,7 @@ export const updateOption = async (
     .from("options")
     .update({ text })
     .eq("id", id)
-    .select("*")
+    .select()
     .single();
 
   handleError(error);

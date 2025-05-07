@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { Room } from "./types";
 import { handleError, getCurrentUserId } from "./utils";
@@ -35,7 +34,7 @@ export const createRoom = async (
       created_by: userId,
       phase: 'lobby' 
     })
-    .select("*")
+    .select()
     .single();
 
   handleError(error);
@@ -100,7 +99,7 @@ export const getUserRooms = async (type: "active" | "recent" = "active"): Promis
   
   let query = supabase
     .from("rooms")
-    .select("*")
+    .select()
     .in('id', roomIds)
     .order("created_at", { ascending: false });
 
