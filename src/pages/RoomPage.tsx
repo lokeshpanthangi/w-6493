@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -16,6 +15,14 @@ import { Dice3D } from "@/components/ui/dice-3d";
 import { CoinFlip } from "@/components/ui/coin-flip";
 import { SpinnerWheel } from "@/components/ui/spinner-wheel";
 import { Clock, Plus, Share, Trash, Edit, Check, X } from "lucide-react";
+import { useRoomRealtime } from "@/hooks/useRealtime";
+import { getRoomParticipants, updateParticipantStatus } from "@/services/participantService";
+import { castVote } from "@/services/voteService";
+import { supabase } from "@/integrations/supabase/client";
+import { getCurrentUserId } from "@/services/utils";
+import dayjs from "dayjs";
+import { updateRoom } from "@/services/roomService";
+import { getProfile } from "@/services/profileService";
 
 // Mock room phases
 type RoomPhase = "lobby" | "submission" | "voting" | "results";
@@ -37,9 +44,9 @@ interface Participant {
   name: string;
   avatar?: string;
   status: "online" | "away" | "offline";
-  hasSubmitted: boolean;
-  hasVoted: boolean;
-  isReady: boolean;
+  has_submitted: boolean;
+  has_voted: boolean;
+  is_ready: boolean;
 }
 
 export default function RoomPage() {
@@ -47,24 +54,60 @@ export default function RoomPage() {
   const { toast } = useToast();
   const { roomId } = useParams<{ roomId: string }>();
   
-  const [isLoading, setIsLoading] = useState(true);
-  const [roomPhase, setRoomPhase] = useState<RoomPhase>("submission");
-  const [roomDetails, setRoomDetails] = useState({
-    name: "Movie Night Decision",
-    description: "Let's decide which movie to watch tonight!",
-    createdBy: "Alex",
-    type: "spinner" as RoomDecisionMethod,
-    timeRemaining: 1800, // seconds
-    allowEveryoneToSubmit: true,
-    hideResultsUntilEnd: true,
-    isCreator: true,
-  });
-  
+  // Use real-time hook
+  const { room, participants, options, votes, loading, error } = useRoomRealtime(roomId!);
   const [newOption, setNewOption] = useState("");
-  const [options, setOptions] = useState<Option[]>([]);
-  const [participants, setParticipants] = useState<Participant[]>([]);
-  const [editingOption, setEditingOption] = useState<Option | null>(null);
+  const [editingOption, setEditingOption] = useState<any | null>(null);
   const [isReady, setIsReady] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [roomPhase, setRoomPhase] = useState<"lobby" | "submission" | "voting" | "results">("submission");
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [timer, setTimer] = useState<number | null>(null);
+  const [creatorName, setCreatorName] = useState<string>("");
+  const [showAddActivity, setShowAddActivity] = useState(false);
+
+  useEffect(() => {
+    setIsLoading(loading);
+    if (room) setRoomPhase(room.phase as any);
+    getCurrentUserId().then(setCurrentUserId);
+  }, [loading, room]);
+
+  // Timer effect
+  useEffect(() => {
+    if (room?.expires_at && room?.phase !== 'results') {
+      const updateTimer = () => {
+        const expires = dayjs(room.expires_at);
+        const now = dayjs();
+        const diff = expires.diff(now, 'second');
+        setTimer(diff > 0 ? diff : 0);
+        if (diff <= 0 && room.phase !== 'results') {
+          // Move room to expired (results) phase
+          updateRoom(room.id, { phase: 'results' });
+        }
+      };
+      updateTimer();
+      const interval = setInterval(updateTimer, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [room?.expires_at, room?.phase, room?.id]);
+
+  // Set creator name from participants' profiles if available, otherwise fetch from profiles table
+  useEffect(() => {
+    async function setCreator() {
+      if (room) {
+        // Try to find creator in participants
+        const creator = participants.find(p => p.user_id === room.created_by);
+        if (creator && creator.profiles?.full_name) {
+          setCreatorName(creator.profiles.full_name);
+        } else {
+          // Always fetch from profiles table if not found
+          const profile = await getProfile(room.created_by);
+          setCreatorName(profile?.full_name || room.created_by);
+        }
+      }
+    }
+    setCreator();
+  }, [room, participants]);
 
   // Format time remaining
   const formatTimeRemaining = (seconds: number) => {
@@ -73,128 +116,47 @@ export default function RoomPage() {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Load room data
-  useEffect(() => {
-    // Mock API call to fetch room data
-    setTimeout(() => {
-      // Mock participants
-      setParticipants([
-        {
-          id: "1",
-          name: "Alex",
-          status: "online",
-          hasSubmitted: true,
-          hasVoted: false,
-          isReady: true,
-        },
-        {
-          id: "2",
-          name: "Taylor",
-          status: "online",
-          hasSubmitted: false,
-          hasVoted: false,
-          isReady: false,
-        },
-        {
-          id: "3",
-          name: "Jordan",
-          status: "away",
-          hasSubmitted: true,
-          hasVoted: false,
-          isReady: true,
-        },
-      ]);
-      
-      // Mock options
-      setOptions([
-        {
-          id: "opt1",
-          text: "The Matrix",
-          createdBy: "Alex",
-          isYours: true,
-        },
-        {
-          id: "opt2",
-          text: "Inception",
-          createdBy: "Jordan",
-          isYours: false,
-        },
-      ]);
-      
-      setIsLoading(false);
-    }, 1500);
-    
-    // Countdown timer
-    const timer = setInterval(() => {
-      setRoomDetails(prev => ({
-        ...prev,
-        timeRemaining: Math.max(0, prev.timeRemaining - 1)
-      }));
-    }, 1000);
-    
-    return () => clearInterval(timer);
-  }, [roomId]);
-
-  // Handle adding a new option
-  const handleAddOption = () => {
-    if (!newOption.trim()) return;
-    
-    const newId = `opt${options.length + 1}`;
-    setOptions([...options, {
-      id: newId,
+  // Add new activity/option
+  const handleAddOption = async () => {
+    if (!newOption.trim() || !roomId) return;
+    const userId = await getCurrentUserId();
+    const { error } = await supabase.from("options").insert({
+      room_id: roomId,
       text: newOption,
-      createdBy: "You",
-      isYours: true,
-    }]);
-    
-    setNewOption("");
-    
-    toast({
-      title: "Option added",
-      description: "Your option has been added to the list",
+      created_by: userId,
     });
+    if (error) {
+      toast({ title: "Error", description: error.message });
+    } else {
+      setNewOption("");
+      toast({ title: "Option added", description: "Your option has been added to the list" });
+    }
   };
 
-  // Handle updating an option
-  const handleUpdateOption = () => {
-    if (!editingOption || !newOption.trim()) return;
-    
-    setOptions(options.map(opt => 
-      opt.id === editingOption.id ? { ...opt, text: newOption } : opt
-    ));
-    
-    setEditingOption(null);
-    setNewOption("");
-    
-    toast({
-      title: "Option updated",
-      description: "Your option has been updated",
-    });
+  // Voting
+  const handleVote = async (optionId: string) => {
+    if (!roomId) return;
+    try {
+      await castVote(roomId, optionId);
+      toast({ title: "Vote cast", description: "Your vote has been recorded." });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message });
+    }
   };
 
-  // Handle deleting an option
-  const handleDeleteOption = (id: string) => {
-    setOptions(options.filter(opt => opt.id !== id));
-    
-    toast({
-      title: "Option removed",
-      description: "The option has been removed from the list",
-    });
-  };
-
-  // Handle setting user as ready
-  const handleReady = () => {
+  // Mark as ready
+  const handleReady = async () => {
+    if (!roomId) return;
+    await updateParticipantStatus(roomId, { is_ready: true });
     setIsReady(true);
-    
-    // Update participant list (in a real app this would be via API)
-    setParticipants(participants.map(p =>
-      p.id === "1" ? { ...p, isReady: true } : p
-    ));
-    
-    toast({
-      title: "You're ready!",
-      description: "Waiting for other participants to be ready",
-    });
+    toast({ title: "You're ready!", description: "Waiting for other participants to be ready" });
+  };
+
+  // Mark as not ready
+  const handleNotReady = async () => {
+    if (!roomId) return;
+    await updateParticipantStatus(roomId, { is_ready: false });
+    setIsReady(false);
   };
 
   // Handle starting the voting phase
@@ -209,8 +171,8 @@ export default function RoomPage() {
 
   // Handle showing room code
   const handleCopyRoomCode = () => {
-    navigator.clipboard.writeText(roomId || "");
-    
+    const codeToCopy = room?.code || roomId || "";
+    navigator.clipboard.writeText(codeToCopy);
     toast({
       title: "Room code copied",
       description: "Share this code with others to join",
@@ -219,22 +181,81 @@ export default function RoomPage() {
 
   // Calculate progress for the submission phase
   const submissionProgress = Math.round(
-    (participants.filter(p => p.hasSubmitted).length / participants.length) * 100
+    (participants.filter(p => p.has_submitted).length / participants.length) * 100
   );
   
   // Calculate progress for the readiness state
   const readyProgress = Math.round(
-    (participants.filter(p => p.isReady).length / participants.length) * 100
+    (participants.filter(p => p.is_ready).length / participants.length) * 100
   );
+
+  // Helper for decision method label and icon
+  const getDecisionMethod = (type: string) => {
+    switch (type) {
+      case "dice":
+        return { label: "Dice Roll", icon: <Dice3D size="sm" /> };
+      case "coin":
+        return { label: "Coin Flip", icon: <CoinFlip size="sm" /> };
+      case "spinner":
+      default:
+        return { label: "Spinner Wheel", icon: <div className="spinner-wheel w-6 h-6"></div> };
+    }
+  };
+
+  // In the Room Info card, always show the creator's name from participants' profiles if available, otherwise fallback to the current user's name if they are the creator, or UID as last resort
+  const getCurrentUserName = () => {
+    // Try to get the current user's name from the participants list
+    const me = participants.find(p => p.user_id === currentUserId);
+    return me?.profiles?.full_name || "You";
+  };
+  const creatorInfo = (() => {
+    if (!room || !participants) return null;
+    const creator = participants.find(p => p.user_id === room.created_by);
+    if (creator && creator.profiles?.full_name) {
+      return {
+        name: creator.profiles.full_name,
+        avatar: creator.profiles.avatar_url,
+      };
+    } else if (room.created_by === currentUserId) {
+      return {
+        name: getCurrentUserName(),
+        avatar: undefined,
+      };
+    } else {
+      return {
+        name: creatorName || room.created_by || "-",
+        avatar: undefined,
+      };
+    }
+  })();
+
+  const isCurrentUserParticipant = participants.some(p => p.user_id === currentUserId);
+
+  const allParticipants = (() => {
+    if (!room) return [];
+    if (participants.length > 0) return participants;
+    // If no participants and current user is NOT a participant, show creator as default
+    if (!isCurrentUserParticipant) {
+      return [{
+        id: "creator",
+        user_id: room.created_by,
+        profiles: { full_name: creatorName, avatar_url: undefined },
+        is_ready: false,
+        has_submitted: false,
+        has_voted: false,
+      }];
+    }
+    return [];
+  })();
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
       {isLoading ? (
         <div className="flex flex-col items-center justify-center p-12 space-y-4">
           <div className="animate-spin">
-            {roomDetails.type === "dice" && <Dice3D size="lg" />}
-            {roomDetails.type === "coin" && <CoinFlip size="lg" />}
-            {roomDetails.type === "spinner" && (
+            {room?.type === "dice" && <Dice3D size="lg" />}
+            {room?.type === "coin" && <CoinFlip size="lg" />}
+            {room?.type === "spinner" && (
               <SpinnerWheel size="md" options={["Loading", "Please", "Wait"]} />
             )}
           </div>
@@ -245,7 +266,7 @@ export default function RoomPage() {
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-bold">{roomDetails.name}</h1>
+                <h1 className="text-2xl font-bold">{room?.name}</h1>
                 <Badge
                   variant="outline"
                   className={
@@ -264,8 +285,8 @@ export default function RoomPage() {
                   {roomPhase === "results" && "Results"}
                 </Badge>
               </div>
-              {roomDetails.description && (
-                <p className="text-muted-foreground mt-1">{roomDetails.description}</p>
+              {room?.description && (
+                <p className="text-muted-foreground mt-1">{room.description}</p>
               )}
             </div>
             
@@ -273,7 +294,7 @@ export default function RoomPage() {
               <div className="flex items-center gap-1 bg-muted px-2 py-1 rounded-md text-sm">
                 <Clock className="h-4 w-4 text-muted-foreground" />
                 <span className="text-muted-foreground">
-                  {formatTimeRemaining(roomDetails.timeRemaining)}
+                  {timer !== null ? formatTimeRemaining(timer) : "-"}
                 </span>
               </div>
               
@@ -299,41 +320,40 @@ export default function RoomPage() {
                 </CardHeader>
                 
                 <CardContent>
-                  {roomPhase === "submission" && (
+                  {roomPhase !== 'results' && roomPhase === "submission" && (
                     <div className="space-y-6">
+                      {/* Add Activity Button */}
+                      {!showAddActivity && !editingOption && (
+                        <Button onClick={() => setShowAddActivity(true)}>
+                          <Plus className="h-4 w-4 mr-2" /> Add Activity
+                        </Button>
+                      )}
                       {/* Option submission form */}
-                      {(roomDetails.allowEveryoneToSubmit || roomDetails.isCreator) && (
+                      {(showAddActivity || editingOption) && (
                         <div className="space-y-3">
                           <Label htmlFor="option">
-                            {editingOption ? "Update Option" : "Add an Option"}
+                            {editingOption ? "Update Option" : "Add an Activity"}
                           </Label>
                           <div className="flex space-x-2">
                             <Input
                               id="option"
-                              placeholder="Enter your option here"
+                              placeholder="Enter your activity here"
                               value={newOption}
                               onChange={(e) => setNewOption(e.target.value)}
                             />
-                            {editingOption ? (
-                              <>
-                                <Button onClick={handleUpdateOption}>
-                                  Update
-                                </Button>
-                                <Button 
-                                  variant="ghost" 
-                                  onClick={() => {
-                                    setEditingOption(null);
-                                    setNewOption("");
-                                  }}
-                                >
-                                  Cancel
-                                </Button>
-                              </>
-                            ) : (
-                              <Button onClick={handleAddOption}>
-                                <Plus className="h-4 w-4 mr-2" /> Add
-                              </Button>
-                            )}
+                            <Button onClick={handleAddOption}>
+                              {editingOption ? "Update" : "Add"}
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              onClick={() => {
+                                setEditingOption(null);
+                                setNewOption("");
+                                setShowAddActivity(false);
+                              }}
+                            >
+                              Cancel
+                            </Button>
                           </div>
                         </div>
                       )}
@@ -350,31 +370,17 @@ export default function RoomPage() {
                               <div 
                                 key={option.id} 
                                 className={`border rounded-md p-3 flex justify-between items-center ${
-                                  option.isYours ? "bg-muted/40" : ""
+                                  option.created_by === currentUserId ? "bg-muted/40" : ""
                                 }`}
                               >
                                 <div className="space-y-1">
                                   <p>{option.text}</p>
-                                  {option.isYours && (
+                                  {option.created_by === currentUserId && (
                                     <p className="text-xs text-muted-foreground">
                                       Added by you
                                     </p>
                                   )}
                                 </div>
-                                
-                                {option.isYours && (
-                                  <div className="flex items-center gap-1">
-                                    <Button variant="ghost" size="sm" onClick={() => {
-                                      setEditingOption(option);
-                                      setNewOption(option.text);
-                                    }}>
-                                      <Edit className="h-4 w-4" />
-                                    </Button>
-                                    <Button variant="ghost" size="sm" onClick={() => handleDeleteOption(option.id)}>
-                                      <Trash className="h-4 w-4" />
-                                    </Button>
-                                  </div>
-                                )}
                               </div>
                             ))}
                           </div>
@@ -385,7 +391,7 @@ export default function RoomPage() {
                         <div className="flex justify-between items-center">
                           <h3 className="text-sm font-medium">Options Submitted</h3>
                           <span className="text-sm text-muted-foreground">
-                            {participants.filter(p => p.hasSubmitted).length} / {participants.length} participants
+                            {participants.filter(p => p.has_submitted).length} / {participants.length} participants
                           </span>
                         </div>
                         <Progress value={submissionProgress} className="h-2" />
@@ -402,18 +408,18 @@ export default function RoomPage() {
                               <Check className="h-4 w-4 text-green-600" />
                               <span className="font-medium">You're ready to vote</span>
                             </div>
-                            <Button variant="ghost" size="sm" onClick={() => setIsReady(false)}>
+                            <Button variant="ghost" size="sm" onClick={handleNotReady}>
                               Cancel
                             </Button>
                           </div>
                         )}
                         
-                        {roomDetails.isCreator && (
+                        {room?.created_by === currentUserId && (
                           <div className="mt-6 pt-4 border-t">
                             <div className="flex justify-between items-center">
                               <h3 className="text-sm font-medium">Ready to Vote</h3>
                               <span className="text-sm text-muted-foreground">
-                                {participants.filter(p => p.isReady).length} / {participants.length} participants
+                                {participants.filter(p => p.is_ready).length} / {participants.length} participants
                               </span>
                             </div>
                             <Progress value={readyProgress} className="h-2 mt-2 mb-4" />
@@ -426,7 +432,7 @@ export default function RoomPage() {
                     </div>
                   )}
                   
-                  {roomPhase === "voting" && (
+                  {roomPhase !== 'results' && roomPhase === "voting" && (
                     <div className="space-y-4">
                       <p>Time to vote! Select your preferred option:</p>
                       
@@ -436,6 +442,7 @@ export default function RoomPage() {
                             key={option.id}
                             variant="outline"
                             className="justify-start h-auto py-6 text-base"
+                            onClick={() => handleVote(option.id)}
                           >
                             {option.text}
                           </Button>
@@ -454,38 +461,43 @@ export default function RoomPage() {
                   <CardTitle className="text-lg">Participants</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {participants.map((participant) => (
-                    <div 
-                      key={participant.id} 
-                      className="flex items-center justify-between"
-                    >
-                      <div className="flex items-center gap-2">
-                        <UserAvatar 
-                          name={participant.name} 
-                          src={participant.avatar}
-                          size="sm"
-                          status={participant.status}
-                        />
-                        <span className="text-sm">{participant.name}</span>
+                  <div className="max-h-60 overflow-y-auto pr-2">
+                    {allParticipants.map((participant) => (
+                      <div 
+                        key={participant.id} 
+                        className="flex items-center justify-between"
+                      >
+                        <div className="flex items-center gap-2">
+                          <UserAvatar 
+                            name={participant.profiles?.full_name || "-"} 
+                            src={participant.profiles?.avatar_url}
+                            size="sm"
+                          />
+                          <span className="text-sm">
+                            {participant.user_id === currentUserId
+                              ? (participant.profiles?.full_name ? `${participant.profiles.full_name} (YOU)` : "YOU")
+                              : participant.profiles?.full_name || "-"}
+                          </span>
+                        </div>
+                        <div className="flex gap-1">
+                          {participant.is_ready && (
+                            <Badge variant="outline" className="bg-green-50 text-green-700">
+                              Ready
+                            </Badge>
+                          )}
+                          {participant.has_submitted && roomPhase === "submission" && (
+                            <Badge variant="outline" className="bg-blue-50 text-blue-700">
+                              Submitted
+                            </Badge>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex gap-1">
-                        {participant.isReady && (
-                          <Badge variant="outline" className="bg-green-50 text-green-700">
-                            Ready
-                          </Badge>
-                        )}
-                        {participant.hasSubmitted && roomPhase === "submission" && (
-                          <Badge variant="outline" className="bg-blue-50 text-blue-700">
-                            Submitted
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </CardContent>
                 <CardFooter className="border-t pt-4 flex justify-between">
                   <span className="text-sm text-muted-foreground">
-                    {participants.length} participants
+                    {allParticipants.length} participant{allParticipants.length !== 1 ? "s" : ""}
                   </span>
                   <Button variant="outline" size="sm" onClick={() => handleCopyRoomCode()}>
                     Invite More
@@ -501,25 +513,19 @@ export default function RoomPage() {
                 <CardContent className="space-y-4">
                   <div className="space-y-1">
                     <h3 className="text-sm font-medium text-muted-foreground">Room Code</h3>
-                    <div className="font-mono text-lg font-bold">{roomId}</div>
+                    <div className="font-mono text-lg font-bold">{room?.code || "-"}</div>
                   </div>
                   
                   <div className="space-y-1">
                     <h3 className="text-sm font-medium text-muted-foreground">Created By</h3>
-                    <p>{roomDetails.createdBy}</p>
+                    <p>{creatorInfo?.name || "-"}</p>
                   </div>
                   
                   <div className="space-y-1">
                     <h3 className="text-sm font-medium text-muted-foreground">Decision Method</h3>
                     <div className="flex items-center gap-2">
-                      {roomDetails.type === "dice" && <Dice3D size="sm" />}
-                      {roomDetails.type === "coin" && <CoinFlip size="sm" />}
-                      {roomDetails.type === "spinner" && <div className="spinner-wheel w-6 h-6"></div>}
-                      <span>
-                        {roomDetails.type === "dice" && "Dice Roll"}
-                        {roomDetails.type === "coin" && "Coin Flip"}
-                        {roomDetails.type === "spinner" && "Spinner Wheel"}
-                      </span>
+                      {getDecisionMethod(room?.type || "spinner").icon}
+                      <span>{getDecisionMethod(room?.type || "spinner").label}</span>
                     </div>
                   </div>
                 </CardContent>

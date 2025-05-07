@@ -1,4 +1,3 @@
-
 import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -66,7 +65,7 @@ export function RoomCard({
           Created by <span className="font-medium">{createdBy}</span>
         </div>
         <Button size="sm" variant={active ? "default" : "outline"} onClick={onJoin}>
-          {active ? "Continue" : "Join"}
+          {active ? (onJoin ? "Continue" : "Join") : "View"}
         </Button>
       </CardFooter>
       

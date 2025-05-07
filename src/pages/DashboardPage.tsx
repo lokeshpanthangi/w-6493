@@ -1,5 +1,4 @@
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -12,6 +11,9 @@ import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/components/ui/use-toast";
 import { getUserRooms, getRoomByCode, joinRoom } from "@/services/api";
 import { Plus } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { getProfile } from "@/services/profileService";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function DashboardPage() {
   const navigate = useNavigate();
@@ -19,6 +21,9 @@ export default function DashboardPage() {
   const { user } = useAuth();
   const [roomCode, setRoomCode] = useState("");
   const [isJoining, setIsJoining] = useState(false);
+  const [selectedTab, setSelectedTab] = useState<'active' | 'expired'>('active');
+  const [creatorNames, setCreatorNames] = useState<Record<string, string>>({});
+  const [loadingCreators, setLoadingCreators] = useState(false);
 
   // Fetch user's active rooms
   const { 
@@ -40,6 +45,45 @@ export default function DashboardPage() {
     queryKey: ['recent-rooms'],
     queryFn: () => getUserRooms('recent')
   });
+
+  // Add a new query for completed/expired rooms
+  const { 
+    data: completedRooms = [], 
+    isLoading: isLoadingCompleted,
+    refetch: refetchCompletedRooms
+  } = useQuery({
+    queryKey: ['completed-rooms'],
+    queryFn: () => getUserRooms('recent')
+  });
+
+  useEffect(() => {
+    async function fetchCreatorNames() {
+      setLoadingCreators(true);
+      const allRooms = [...activeRooms, ...completedRooms, ...recentRooms];
+      const uniqueCreators = Array.from(new Set(allRooms.map(r => r.created_by)));
+      if (uniqueCreators.length === 0) {
+        setCreatorNames({});
+        setLoadingCreators(false);
+        return;
+      }
+      // Batch fetch all profiles in one query
+      const { data: profiles, error } = await supabase
+        .from("profiles")
+        .select("id, full_name")
+        .in("id", uniqueCreators);
+
+      const names: Record<string, string> = {};
+      if (profiles) {
+        for (const profile of profiles) {
+          names[profile.id] = profile.full_name || profile.id;
+        }
+      }
+      setCreatorNames(names);
+      setLoadingCreators(false);
+    }
+    fetchCreatorNames();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeRooms, completedRooms, recentRooms]);
 
   const handleJoinRoom = async () => {
     if (roomCode.length !== 6) {
@@ -93,7 +137,7 @@ export default function DashboardPage() {
     }
   };
 
-  if (isLoadingActive || isLoadingRecent) {
+  if (isLoadingActive || isLoadingRecent || isLoadingCompleted || loadingCreators) {
     return (
       <div className="flex flex-col items-center justify-center py-12">
         <Spinner size="lg" />
@@ -102,7 +146,7 @@ export default function DashboardPage() {
     );
   }
 
-  const showCreateRoomCTA = !activeRooms.length && !recentRooms.length;
+  const showCreateRoomCTA = !activeRooms.length && !recentRooms.length && !completedRooms.length;
 
   return (
     <div className="space-y-6">
@@ -165,35 +209,69 @@ export default function DashboardPage() {
         </div>
       ) : (
         <>
-          <div>
-            <h2 className="text-xl font-bold mb-4">My Active Rooms</h2>
-            {activeRooms.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {activeRooms.map((room) => (
-                  <RoomCard 
-                    key={room.id} 
-                    id={room.id}
-                    name={room.name}
-                    description={room.description || ''}
-                    createdBy={user?.user_metadata?.full_name || 'You'}
-                    participants={[]}
-                    active={room.phase !== 'results'}
-                    type={room.type as "dice" | "spinner" | "coin"}
-                  />
-                ))}
-              </div>
-            ) : (
-              <div className="bg-white rounded-xl p-6 border flex flex-col items-center justify-center text-center py-8">
-                <h3 className="text-lg font-medium mb-2">No active rooms</h3>
-                <p className="text-muted-foreground mb-4">
-                  You don't have any active decision rooms. Create one to get started!
-                </p>
-                <Link to="/create-room">
-                  <Button>Create a Room</Button>
-                </Link>
-              </div>
-            )}
-          </div>
+          <Tabs value={selectedTab} onValueChange={setSelectedTab} className="w-full">
+            <TabsList className="mb-4">
+              <TabsTrigger value="active">Active Rooms</TabsTrigger>
+              <TabsTrigger value="expired">Expired Rooms</TabsTrigger>
+            </TabsList>
+            <TabsContent value="active">
+              <h2 className="text-xl font-bold mb-4">My Active Rooms</h2>
+              {activeRooms.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {activeRooms.map((room) => (
+                    <RoomCard 
+                      key={room.id} 
+                      id={room.id}
+                      name={room.name}
+                      description={room.description || ''}
+                      createdBy={creatorNames[room.created_by] || room.created_by}
+                      participants={[]}
+                      active={room.phase !== 'results'}
+                      type={room.type as "dice" | "spinner" | "coin"}
+                      onJoin={() => navigate(`/room/${room.id}`)}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="bg-white rounded-xl p-6 border flex flex-col items-center justify-center text-center py-8">
+                  <h3 className="text-lg font-medium mb-2">No active rooms</h3>
+                  <p className="text-muted-foreground mb-4">
+                    You don't have any active decision rooms. Create one to get started!
+                  </p>
+                  <Link to="/create-room">
+                    <Button>Create a Room</Button>
+                  </Link>
+                </div>
+              )}
+            </TabsContent>
+            <TabsContent value="expired">
+              <h2 className="text-xl font-bold mb-4">Expired Rooms</h2>
+              {completedRooms.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {completedRooms.map((room) => (
+                    <RoomCard 
+                      key={room.id} 
+                      id={room.id}
+                      name={room.name}
+                      description={room.description || ''}
+                      createdBy={creatorNames[room.created_by] || room.created_by}
+                      participants={[]}
+                      active={false}
+                      type={room.type as "dice" | "spinner" | "coin"}
+                      onJoin={() => navigate(`/room/${room.id}`)}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="bg-white rounded-xl p-6 border flex flex-col items-center justify-center text-center py-8">
+                  <h3 className="text-lg font-medium mb-2">No expired rooms</h3>
+                  <p className="text-muted-foreground mb-4">
+                    You don't have any expired decision rooms.
+                  </p>
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
 
           {recentRooms.length > 0 && (
             <div>
@@ -206,10 +284,11 @@ export default function DashboardPage() {
                     id={room.id}
                     name={room.name}
                     description={room.description || ''}
-                    createdBy={user?.user_metadata?.full_name || 'You'}
+                    createdBy={creatorNames[room.created_by] || room.created_by}
                     participants={[]}
                     active={false}
                     type={room.type as "dice" | "spinner" | "coin"}
+                    onJoin={() => navigate(`/room/${room.id}`)}
                   />
                 ))}
               </div>

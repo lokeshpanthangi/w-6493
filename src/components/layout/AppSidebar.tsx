@@ -1,5 +1,4 @@
-
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { Home, Plus, History, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -20,7 +19,8 @@ import {
 export function AppSidebar() {
   const location = useLocation();
   const isMobile = useIsMobile();
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
   
   // Don't show the sidebar on mobile
   if (isMobile) return null;
@@ -36,7 +36,6 @@ export function AppSidebar() {
           <Dice3D size="sm" className="shrink-0" />
           <h1 className="font-bold text-xl truncate">DiceyDecisions</h1>
         </div>
-        <SidebarTrigger className="ml-auto" />
       </SidebarHeader>
       
       <SidebarContent className="p-2">
@@ -61,20 +60,19 @@ export function AppSidebar() {
               Create Room
             </Button>
           </Link>
-          <Link to="/history">
-            <Button
-              variant={isActive("/history") ? "default" : "ghost"}
-              className="w-full justify-start"
-              size="sm"
-            >
-              <History className="mr-2 h-4 w-4" />
-              Past Decisions
-            </Button>
-          </Link>
+          <Button
+            variant={isActive("/dashboard?tab=expired") ? "default" : "ghost"}
+            className="w-full justify-start"
+            size="sm"
+            onClick={() => navigate("/dashboard?tab=expired")}
+          >
+            <History className="mr-2 h-4 w-4" />
+            Past Decisions
+          </Button>
         </div>
       </SidebarContent>
       
-      <SidebarFooter className="p-4">
+      <SidebarFooter className="p-4 flex flex-col gap-2">
         <Link to="/profile">
           <div className="flex items-center gap-3 cursor-pointer p-2 rounded-md hover:bg-muted">
             <UserAvatar 
@@ -89,6 +87,9 @@ export function AppSidebar() {
             </div>
           </div>
         </Link>
+        <Button variant="outline" className="w-full mt-2" onClick={signOut}>
+          Logout
+        </Button>
       </SidebarFooter>
     </Sidebar>
   );
