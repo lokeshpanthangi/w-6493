@@ -31,6 +31,7 @@ import { Check, Clock, Copy, Plus, Share, Users, X } from "lucide-react";
 import { createRoom, joinRoom } from "@/services/api";
 import { useAuth } from "@/context/AuthContext";
 import { Checkbox } from "@/components/ui/checkbox";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 interface DecisionTypeOption {
   id: "dice" | "coin" | "spinner";
@@ -44,7 +45,7 @@ const roomFormSchema = z.object({
   description: z.string().optional(),
   maxParticipants: z.number().int().nonnegative(),
   timeLimit: z.number().int().min(5).max(120),
-  decisionTypes: z.array(z.enum(["dice", "coin", "spinner"])),
+  decisionType: z.enum(["dice", "coin", "spinner"]).default("spinner"),
   allowEveryoneToSubmit: z.boolean().default(true),
   hideResultsUntilEnd: z.boolean().default(false),
 });
@@ -97,24 +98,11 @@ export default function CreateRoomPage() {
       description: "",
       maxParticipants: 0, // 0 means unlimited
       timeLimit: 30, // 30 minutes default
-      decisionTypes: ["spinner"],
+      decisionType: "spinner",
       allowEveryoneToSubmit: true,
       hideResultsUntilEnd: false,
     },
   });
-
-  const toggleDecisionType = (type: "dice" | "coin" | "spinner") => {
-    const currentValues = form.getValues().decisionTypes;
-    
-    if (currentValues.includes(type)) {
-      // Remove if already selected
-      const updatedTypes = currentValues.filter(t => t !== type);
-      form.setValue("decisionTypes", updatedTypes);
-    } else {
-      // Add if not selected
-      form.setValue("decisionTypes", [...currentValues, type]);
-    }
-  };
 
   const handleNextStep = () => {
     if (currentStep === 0 && !form.getValues().name) {
@@ -152,17 +140,12 @@ export default function CreateRoomPage() {
       const expiresAt = new Date();
       expiresAt.setMinutes(expiresAt.getMinutes() + formValues.timeLimit);
       
-      // Use the first selected decision type as the primary type
-      // If no decision types are selected, default to spinner
-      const primaryDecisionType = formValues.decisionTypes.length > 0 ? 
-        formValues.decisionTypes[0] : "spinner";
-      
-      // Create the room
+      // Create the room with the selected decision type
       const room = await createRoom({
         name: formValues.name,
         description: formValues.description || null,
         expires_at: expiresAt.toISOString(),
-        type: primaryDecisionType,
+        type: formValues.decisionType, // Use the single decision type
         allow_everyone_to_submit: formValues.allowEveryoneToSubmit,
         hide_results_until_end: formValues.hideResultsUntilEnd,
         max_participants: formValues.maxParticipants || null,
@@ -176,7 +159,7 @@ export default function CreateRoomPage() {
       
       toast({
         title: "Room created!",
-        description: `Your ${primaryDecisionType} decision room is ready to share.`,
+        description: `Your ${formValues.decisionType} decision room is ready to share.`,
       });
       
       setRoomCreated(true);
@@ -295,27 +278,30 @@ export default function CreateRoomPage() {
 
               <FormField
                 control={form.control}
-                name="decisionTypes"
-                render={() => (
+                name="decisionType"
+                render={({ field }) => (
                   <FormItem className="space-y-2">
-                    <FormLabel>Decision Methods <span className="text-muted-foreground text-xs">(Select one or more)</span></FormLabel>
+                    <FormLabel>Decision Method <span className="text-muted-foreground text-xs">(Select one)</span></FormLabel>
                     <FormMessage />
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      {decisionTypes.map((type) => {
-                        const isSelected = form.getValues().decisionTypes.includes(type.id);
-                        return (
+                    <RadioGroup 
+                      value={field.value} 
+                      onValueChange={field.onChange}
+                      className="grid grid-cols-1 md:grid-cols-3 gap-4"
+                    >
+                      {decisionTypes.map((type) => (
+                        <FormControl key={type.id}>
                           <Card 
-                            key={type.id}
                             className={`cursor-pointer transition-all ${
-                              isSelected ? "border-2 border-dicey-purple" : "hover:border-dicey-purple hover:border-opacity-50"
+                              field.value === type.id ? "border-2 border-dicey-purple" : "hover:border-dicey-purple hover:border-opacity-50"
                             }`}
-                            onClick={() => toggleDecisionType(type.id)}
+                            onClick={() => field.onChange(type.id)}
                           >
                             <CardHeader className="pb-2">
                               <div className="flex justify-between items-start">
                                 <CardTitle className="text-lg">{type.name}</CardTitle>
                                 <div className="flex items-center">
-                                  {isSelected && (
+                                  <RadioGroupItem value={type.id} id={type.id} className="sr-only" />
+                                  {field.value === type.id && (
                                     <div className="w-5 h-5 rounded-full bg-dicey-purple flex items-center justify-center mr-2">
                                       <Check className="h-3 w-3 text-white" />
                                     </div>
@@ -328,12 +314,9 @@ export default function CreateRoomPage() {
                               <CardDescription>{type.description}</CardDescription>
                             </CardContent>
                           </Card>
-                        );
-                      })}
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Select one or more decision methods to use in your room. If you don't select any, the spinner will be used by default.
-                    </p>
+                        </FormControl>
+                      ))}
+                    </RadioGroup>
                   </FormItem>
                 )}
               />
@@ -457,23 +440,16 @@ export default function CreateRoomPage() {
                     </div>
                     
                     <div className="space-y-2">
-                      <h3 className="text-sm font-medium text-muted-foreground">Decision Methods</h3>
+                      <h3 className="text-sm font-medium text-muted-foreground">Decision Method</h3>
                       <div className="flex flex-wrap gap-2">
-                        {form.getValues().decisionTypes.length > 0 ? (
-                          form.getValues().decisionTypes.map(type => (
-                            <div key={type} className="flex items-center gap-2 bg-muted rounded-full px-3 py-1">
-                              {type === "dice" && <Dice3D size="sm" />}
-                              {type === "coin" && <CoinFlip size="sm" />}
-                              {type === "spinner" && <div className="spinner-wheel w-4 h-4"></div>}
-                              <span className="text-sm">
-                                {decisionTypes.find(t => t.id === type)?.name}
-                              </span>
-                            </div>
-                          ))
-                        ) : (
+                        {decisionTypes.find(t => t.id === form.getValues().decisionType) && (
                           <div className="flex items-center gap-2 bg-muted rounded-full px-3 py-1">
-                            <div className="spinner-wheel w-4 h-4"></div>
-                            <span className="text-sm">Spinner Wheel (Default)</span>
+                            {form.getValues().decisionType === "dice" && <Dice3D size="sm" />}
+                            {form.getValues().decisionType === "coin" && <CoinFlip size="sm" />}
+                            {form.getValues().decisionType === "spinner" && <div className="spinner-wheel w-4 h-4"></div>}
+                            <span className="text-sm">
+                              {decisionTypes.find(t => t.id === form.getValues().decisionType)?.name}
+                            </span>
                           </div>
                         )}
                       </div>
@@ -552,11 +528,9 @@ export default function CreateRoomPage() {
               <Card className="border-dicey-purple-dark/30 bg-gradient-to-br from-white to-dicey-purple-light/20">
                 <CardHeader className="text-center pb-2">
                   <div className="mx-auto mb-2">
-                    {form.getValues().decisionTypes.includes("dice") && <Dice3D size="lg" />}
-                    {form.getValues().decisionTypes.includes("coin") && !form.getValues().decisionTypes.includes("dice") && <CoinFlip size="lg" />}
-                    {(form.getValues().decisionTypes.includes("spinner") || form.getValues().decisionTypes.length === 0) && 
-                     !form.getValues().decisionTypes.includes("dice") && 
-                     !form.getValues().decisionTypes.includes("coin") && (
+                    {form.getValues().decisionType === "dice" && <Dice3D size="lg" />}
+                    {form.getValues().decisionType === "coin" && <CoinFlip size="lg" />}
+                    {form.getValues().decisionType === "spinner" && (
                       <SpinnerWheel size="lg" options={["Ready!", "To Go!", "Decide!"]} />
                     )}
                   </div>

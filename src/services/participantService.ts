@@ -37,8 +37,14 @@ export const getRoomParticipants = async (roomId: string): Promise<Participant[]
   const { data, error } = await supabase
     .from("participants")
     .select(`
-      *,
-      profiles:user_id(*)
+      id,
+      room_id,
+      user_id,
+      joined_at,
+      is_ready,
+      has_voted,
+      has_submitted,
+      profiles:user_id(id, full_name, avatar_url, created_at)
     `)
     .eq("room_id", roomId);
 

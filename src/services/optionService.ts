@@ -1,6 +1,8 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { Option, Profile } from "./types";
 import { handleError, getCurrentUserId } from "./utils";
+import { updateParticipantStatus } from "./participantService";
 
 export const createOption = async (
   roomId: string,
@@ -19,6 +21,15 @@ export const createOption = async (
     .single();
 
   handleError(error);
+  
+  // Update participant status to mark as having submitted
+  try {
+    await updateParticipantStatus(roomId, { has_submitted: true });
+  } catch (err) {
+    console.error("Could not update participant status:", err);
+    // Don't fail the request if this fails
+  }
+  
   return data as Option;
 };
 
@@ -26,8 +37,12 @@ export const getRoomOptions = async (roomId: string): Promise<Option[]> => {
   const { data, error } = await supabase
     .from("options")
     .select(`
-      *,
-      profiles:created_by(*)
+      id,
+      room_id,
+      text,
+      created_by,
+      created_at,
+      profiles:created_by(id, full_name, avatar_url, created_at)
     `)
     .eq("room_id", roomId);
 
