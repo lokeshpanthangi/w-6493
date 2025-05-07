@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -148,6 +149,13 @@ export default function DashboardPage() {
 
   const showCreateRoomCTA = !activeRooms.length && !recentRooms.length && !completedRooms.length;
 
+  // Fix: Create a handler to safely convert string to our tab type
+  const handleTabChange = (value: string) => {
+    if (value === 'active' || value === 'expired') {
+      setSelectedTab(value);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -209,7 +217,7 @@ export default function DashboardPage() {
         </div>
       ) : (
         <>
-          <Tabs value={selectedTab} onValueChange={setSelectedTab} className="w-full">
+          <Tabs value={selectedTab} onValueChange={handleTabChange} className="w-full">
             <TabsList className="mb-4">
               <TabsTrigger value="active">Active Rooms</TabsTrigger>
               <TabsTrigger value="expired">Expired Rooms</TabsTrigger>
