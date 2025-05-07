@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { z } from "zod";
@@ -138,6 +139,8 @@ export default function CreateRoomPage() {
       // Calculate expiry date based on time limit (in minutes)
       const expiresAt = new Date();
       expiresAt.setMinutes(expiresAt.getMinutes() + formValues.timeLimit);
+      
+      console.log("Creating room with decision type:", formValues.decisionType);
       
       // Create the room with the selected decision type
       const room = await createRoom({
@@ -288,32 +291,34 @@ export default function CreateRoomPage() {
                       className="grid grid-cols-1 md:grid-cols-3 gap-4"
                     >
                       {decisionTypes.map((type) => (
-                        <FormControl key={type.id}>
-                          <Card 
-                            className={`cursor-pointer transition-all ${
-                              field.value === type.id ? "border-2 border-dicey-purple" : "hover:border-dicey-purple hover:border-opacity-50"
-                            }`}
-                            onClick={() => field.onChange(type.id)}
-                          >
-                            <CardHeader className="pb-2">
-                              <div className="flex justify-between items-start">
-                                <CardTitle className="text-lg">{type.name}</CardTitle>
-                                <div className="flex items-center">
-                                  <RadioGroupItem value={type.id} id={type.id} className="sr-only" />
-                                  {field.value === type.id && (
-                                    <div className="w-5 h-5 rounded-full bg-dicey-purple flex items-center justify-center mr-2">
-                                      <Check className="h-3 w-3 text-white" />
-                                    </div>
-                                  )}
-                                  <div>{type.icon}</div>
+                        <div key={type.id} className="relative">
+                          <FormControl>
+                            <Card 
+                              className={`cursor-pointer transition-all ${
+                                field.value === type.id ? "border-2 border-dicey-purple" : "hover:border-dicey-purple hover:border-opacity-50"
+                              }`}
+                              onClick={() => field.onChange(type.id)}
+                            >
+                              <CardHeader className="pb-2">
+                                <div className="flex justify-between items-start">
+                                  <CardTitle className="text-lg">{type.name}</CardTitle>
+                                  <div className="flex items-center">
+                                    <RadioGroupItem value={type.id} id={type.id} className="sr-only" />
+                                    {field.value === type.id && (
+                                      <div className="w-5 h-5 rounded-full bg-dicey-purple flex items-center justify-center mr-2">
+                                        <Check className="h-3 w-3 text-white" />
+                                      </div>
+                                    )}
+                                    <div>{type.icon}</div>
+                                  </div>
                                 </div>
-                              </div>
-                            </CardHeader>
-                            <CardContent>
-                              <CardDescription>{type.description}</CardDescription>
-                            </CardContent>
-                          </Card>
-                        </FormControl>
+                              </CardHeader>
+                              <CardContent>
+                                <CardDescription>{type.description}</CardDescription>
+                              </CardContent>
+                            </Card>
+                          </FormControl>
+                        </div>
                       ))}
                     </RadioGroup>
                   </FormItem>

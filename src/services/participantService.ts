@@ -34,7 +34,7 @@ export const joinRoom = async (roomId: string): Promise<Participant> => {
 };
 
 export const getRoomParticipants = async (roomId: string): Promise<Participant[]> => {
-  // Direct join instead of infinite recursion
+  // Use a simple join query without self-reference to avoid infinite recursion
   const { data, error } = await supabase
     .from("participants")
     .select(`

@@ -13,6 +13,13 @@ export const createRoom = async (
   const code = codeData || Math.random().toString(36).substring(2, 8).toUpperCase();
   const userId = await getCurrentUserId();
   
+  console.log("Creating room with data:", {
+    ...roomData,
+    code,
+    created_by: userId,
+    phase: 'lobby'
+  });
+  
   // Create the room with explicit phase as 'lobby'
   const { data, error } = await supabase
     .from("rooms")
