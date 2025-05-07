@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { z } from "zod";
@@ -285,7 +284,7 @@ export default function CreateRoomPage() {
                     <FormMessage />
                     <RadioGroup 
                       value={field.value} 
-                      onValueChange={field.onChange}
+                      onValueChange={(value) => field.onChange(value as "dice" | "coin" | "spinner")}
                       className="grid grid-cols-1 md:grid-cols-3 gap-4"
                     >
                       {decisionTypes.map((type) => (
